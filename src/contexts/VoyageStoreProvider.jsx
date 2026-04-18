@@ -76,10 +76,27 @@ export function VoyageStoreProvider({ children }) {
 
   // One pending-save timer per filename.
   const saveTimers = useRef(new Map());
+  // Per-filename "save currently in flight" flag. Used to serialize saves so
+  // that a debounce timer that fires while the previous save hasn't returned
+  // yet doesn't PUT with the stale sha (which would 409 → ConflictModal).
+  const inFlight = useRef(new Set());
+  // Trampoline ref so the in-flight reschedule always calls the latest
+  // `flushSave` — avoids a self-referential useCallback + stale-closure lint
+  // error when we `setTimeout(() => flushSave(...), 250)` from inside flushSave.
+  const flushSaveRef = useRef(null);
   // Mirror of `voyages` for access inside async callbacks (flushSave), which
   // can't rely on closed-over state because they run after the save round-trip.
   const voyagesRef = useRef(voyages);
   useEffect(() => { voyagesRef.current = voyages; }, [voyages]);
+  // Same pattern for shaById: autosave timers capture `flushSave` at schedule
+  // time, so during a quick burst of edits timer-B's closure still sees the
+  // stale sha from BEFORE timer-A's save returned. Reading from a ref
+  // sidesteps the race so every save uses the freshest sha we know about.
+  const shaByIdRef = useRef(shaById);
+  useEffect(() => { shaByIdRef.current = shaById; }, [shaById]);
+  // Same for drafts — flushSave needs the latest draft, not a stale snapshot.
+  const draftsRef = useRef(drafts);
+  useEffect(() => { draftsRef.current = drafts; }, [drafts]);
 
   // Refresh the manifest from the adapter.
   const refreshList = useCallback(async () => {
@@ -131,14 +148,32 @@ export function VoyageStoreProvider({ children }) {
   // `forceOverwrite` (default false) drops the prevSha so the next save will
   // clobber the remote — used by the "Force overwrite" branch of ConflictModal.
   const flushSave = useCallback(async (filename, { forceOverwrite = false } = {}) => {
-    const draft = drafts[filename];
+    // Read draft + sha from refs, not closures. Autosave timers capture
+    // `flushSave` at schedule time; during a fast edit burst the old closure
+    // could otherwise PUT with a sha that's already been superseded by a
+    // still-in-flight save. That would manifest as a spurious conflict modal.
+    const draft = draftsRef.current[filename];
     if (!draft) return;
+    // If a save is already in flight for this file, don't overlap — reschedule
+    // ourselves once that save returns. Otherwise two PUTs would race with the
+    // same stale sha and one would 409. See scheduleSave below.
+    if (inFlight.current.has(filename)) {
+      const timers = saveTimers.current;
+      if (timers.has(filename)) clearTimeout(timers.get(filename));
+      const t = setTimeout(() => {
+        timers.delete(filename);
+        flushSaveRef.current?.(filename, { forceOverwrite });
+      }, 250);
+      timers.set(filename, t);
+      return;
+    }
+    inFlight.current.add(filename);
     setSaving((prev) => {
       const n = new Set(prev); n.add(filename); return n;
     });
     try {
       const stamped = { ...draft, lastModified: new Date().toISOString() };
-      const prevSha = forceOverwrite ? null : (shaById[filename] || null);
+      const prevSha = forceOverwrite ? null : (shaByIdRef.current[filename] || null);
       const { sha } = await getStorageAdapter().saveVoyage(shipId, filename, stamped, prevSha);
       // Promote draft → loaded snapshot, clear dirty + offline cache.
       setLoadedById((s) => ({ ...s, [filename]: stamped }));
@@ -187,12 +222,15 @@ export function VoyageStoreProvider({ children }) {
         console.error('[VoyageStore] save failed', filename, e);
       }
     } finally {
+      inFlight.current.delete(filename);
       setSaving((prev) => {
         if (!prev.has(filename)) return prev;
         const n = new Set(prev); n.delete(filename); return n;
       });
     }
-  }, [drafts, shipId, shaById]);
+  }, [shipId]);
+  // Keep the trampoline ref aligned with the current flushSave closure.
+  useEffect(() => { flushSaveRef.current = flushSave; }, [flushSave]);
 
   // Schedule a debounced save for `filename`. Resets the timer on each call.
   const scheduleSave = useCallback((filename) => {
