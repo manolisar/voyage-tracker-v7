@@ -1,0 +1,1668 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Voyage Tracker v7 — Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Manrope', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'monospace'],
+          },
+          colors: {
+            navy: { 50:'#f0f4f8',100:'#d9e2ec',200:'#bcccdc',300:'#9fb3c8',400:'#829ab1',500:'#627d98',600:'#486581',700:'#334e68',800:'#243b53',900:'#102a43',950:'#0a1929' },
+            ocean: { 400:'#22d3ee',500:'#06b6d4',600:'#0891b2' },
+            gold:  { 50:'#fffbeb',400:'#fbbf24',500:'#f59e0b',600:'#d97706' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --color-bg: #FAFBFD;
+      --color-surface: #FFFFFF;
+      --color-surface2: #F3F5F9;
+      --color-text: #1A2233;
+      --color-dim: #6B7B8F;
+      --color-faint: #B0BAC6;
+      --color-border-subtle: #E5E9F0;
+
+      --color-hfo:#D97706; --color-hfo-light:#FFF8EB; --color-hfo-band:#F59E0B; --color-hfo-border:#FDE68A;
+      --color-mgo:#059669; --color-mgo-light:#ECFDF5; --color-mgo-band:#10B981; --color-mgo-border:#A7F3D0;
+      --color-lsfo:#6366F1; --color-lsfo-light:#EEF2FF; --color-lsfo-band:#818CF8; --color-lsfo-border:#C7D2FE;
+      --color-water:#0284C7; --color-water-light:#F0F9FF; --color-water-band:#38BDF8; --color-water-border:#BAE6FD;
+      --color-chem:#DB2777; --color-chem-light:#FDF2F8; --color-chem-band:#F472B6; --color-chem-border:#FBCFE8;
+      --color-lube:#EA580C; --color-lube-light:#FFF7ED; --color-lube-band:#FB923C; --color-lube-border:#FED7AA;
+      --color-ocean-500:#06b6d4; --color-ocean-600:#0891b2; --color-ocean-400:#22d3ee;
+
+      /* Semantic state tokens */
+      --color-error-bg:     rgba(239,68,68,0.08);
+      --color-error-border: rgba(239,68,68,0.30);
+      --color-error-fg:     #B91C1C;
+      --color-warn-bg:      rgba(245,158,11,0.08);
+      --color-warn-border:  rgba(245,158,11,0.25);
+      --color-warn-fg:      #B45309;
+
+      /* Landing screen background */
+      --color-landing-bg-from: #F0F9FF;
+      --color-landing-bg-mid:  #FAFBFD;
+      --color-landing-bg-to:   #FFFFFF;
+    }
+
+    /* Dark mode overrides — redefine the core tokens so any element using them adapts automatically */
+    .dark {
+      --color-bg:             #0a1929;
+      --color-surface:        #1e293b;
+      --color-surface2:       rgba(30,41,59,0.5);
+      --color-text:           #e2e8f0;
+      --color-dim:            #94a3b8;
+      --color-faint:          #64748b;
+      --color-border-subtle:  rgba(255,255,255,0.10);
+
+      --color-error-bg:       rgba(248,113,113,0.12);
+      --color-error-border:   rgba(248,113,113,0.40);
+      --color-error-fg:       #FCA5A5;
+      --color-warn-bg:        rgba(245,158,11,0.12);
+      --color-warn-border:    rgba(245,158,11,0.30);
+      --color-warn-fg:        #FCD34D;
+
+      --color-landing-bg-from: #0a1929;
+      --color-landing-bg-mid:  #0f1f33;
+      --color-landing-bg-to:   #142844;
+    }
+
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: 'Manrope', sans-serif; overflow: hidden; }
+    .dark body { background: var(--color-bg); color: var(--color-text); }
+    * { font-family: 'Manrope', sans-serif; }
+    .font-mono, code, pre, input[type="number"], .mono { font-family: 'IBM Plex Mono', monospace; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.5); }
+    .dark ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2); }
+    .dark ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.4); }
+
+    .glass { background: var(--color-surface); border: 1px solid var(--color-border-subtle); }
+    .dark .glass { background: rgba(15,23,42,0.95); border: 1px solid rgba(255,255,255,0.1); }
+    .glass-card { background: var(--color-surface); border: 1px solid var(--color-border-subtle); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .dark .glass-card { background: rgba(30,41,59,0.9); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+    .phase-port, .phase-sea, .phase-standby { background: var(--color-surface2); border-bottom: 1px solid var(--color-border-subtle); }
+    .dark .phase-port, .dark .phase-sea, .dark .phase-standby { background: rgba(30,41,59,0.5); border-bottom-color: rgba(255,255,255,0.1); }
+
+    .phase-title-input { background: transparent; border: none; color: var(--color-text); font-weight: 700; font-size: 0.9rem; width: 100%; }
+    .phase-title-input:focus { outline: none; background: rgba(0,0,0,0.04); border-radius: 6px; padding: 4px 10px; margin: -4px -10px; }
+    .dark .phase-title-input { color: #e2e8f0; }
+
+    .ph-tag { font-size: 0.55rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 10px; border-radius: 6px; }
+    .ph-tag-port    { background: #EFF6FF; color: #3B82F6; border: 1px solid #BFDBFE; }
+    .ph-tag-sea     { background: #ECFEFF; color: #06B6D4; border: 1px solid #A5F3FC; }
+    .ph-tag-standby { background: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; }
+    .dark .ph-tag-port    { background: rgba(59,130,246,0.15); color: #93C5FD; border-color: rgba(59,130,246,0.3); }
+    .dark .ph-tag-sea     { background: rgba(6,182,212,0.15); color: #67E8F9; border-color: rgba(6,182,212,0.3); }
+    .dark .ph-tag-standby { background: rgba(245,158,11,0.15); color: #FCD34D; border-color: rgba(245,158,11,0.3); }
+
+    .cat-card { border-radius: 12px; overflow: hidden; position: relative; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .cat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    .cat-card::before { content:''; position: absolute; top: 0; bottom: 0; left: 0; width: 6px; }
+    .cat-label { font-size: 0.55rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 0.6rem 1rem 0.3rem 1.25rem; display:flex; align-items:center; gap:8px; }
+    .cat-body  { padding: 0.4rem 1rem 0.85rem 1.25rem; }
+
+    .cat-card.fuel { background: var(--color-hfo-light); border: 1px solid var(--color-hfo-border); }
+    .cat-card.fuel::before { background: linear-gradient(var(--color-hfo-band), var(--color-mgo-band), var(--color-lsfo-band)); width: 8px; }
+    .cat-card.fuel .cat-label { color: var(--color-hfo); }
+    .dark .cat-card.fuel { background: rgba(217,119,6,0.08); border-color: rgba(217,119,6,0.2); }
+    .dark .cat-card.fuel .cat-label { color: var(--color-hfo-band); }
+
+    .cat-card.water { background: var(--color-water-light); border: 1px solid var(--color-water-border); }
+    .cat-card.water::before { background: var(--color-water-band); }
+    .cat-card.water .cat-label { color: var(--color-water); }
+    .dark .cat-card.water { background: rgba(2,132,199,0.08); border-color: rgba(2,132,199,0.2); }
+    .dark .cat-card.water .cat-label { color: var(--color-water-band); }
+
+    .cat-card.chem { background: var(--color-chem-light); border: 1px solid var(--color-chem-border); }
+    .cat-card.chem::before { background: var(--color-chem-band); }
+    .cat-card.chem .cat-label { color: var(--color-chem); }
+    .dark .cat-card.chem { background: rgba(219,39,119,0.08); border-color: rgba(219,39,119,0.2); }
+    .dark .cat-card.chem .cat-label { color: var(--color-chem-band); }
+
+    .cat-card.lube { background: var(--color-lube-light); border: 1px solid var(--color-lube-border); }
+    .cat-card.lube::before { background: var(--color-lube-band); }
+    .cat-card.lube .cat-label { color: var(--color-lube); }
+    .dark .cat-card.lube { background: rgba(234,88,12,0.08); border-color: rgba(234,88,12,0.2); }
+    .dark .cat-card.lube .cat-label { color: var(--color-lube-band); }
+
+    .cat-card.nav { background: var(--color-water-light); border: 1px solid var(--color-water-border); }
+    .cat-card.nav::before { background: var(--color-ocean-500); }
+    .cat-card.nav .cat-label { color: var(--color-water); }
+    .dark .cat-card.nav { background: rgba(2,132,199,0.08); border-color: rgba(2,132,199,0.2); }
+    .dark .cat-card.nav .cat-label { color: var(--color-water-band); }
+
+    .cat-card.legs { background: var(--color-surface); border: 1px solid var(--color-border-subtle); }
+    .cat-card.legs::before { background: var(--color-ocean-500); }
+    .cat-card.legs .cat-label { color: var(--color-dim); }
+    .dark .cat-card.legs { background: rgba(30,41,59,0.5); border-color: rgba(255,255,255,0.1); }
+
+    .fuel-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .fuel-col { text-align: center; }
+    .fuel-col .fc-type { font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; display:flex; align-items:center; justify-content:center; gap:5px; }
+    .fuel-col .fc-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    .fuel-col .fc-big { font-size: 2rem; font-weight: 800; line-height: 1.1; font-family: 'IBM Plex Mono', monospace; }
+    .fuel-col .fc-rob { font-size: 0.6rem; color: var(--color-dim); margin-top: 2px; font-family: 'IBM Plex Mono', monospace; }
+    .dark .fuel-col .fc-rob { color: #94a3b8; }
+    .fuel-col.hfo  .fc-type, .fuel-col.hfo  .fc-big { color: var(--color-hfo); }
+    .fuel-col.hfo  .fc-dot  { background: var(--color-hfo-band); }
+    .fuel-col.mgo  .fc-type, .fuel-col.mgo  .fc-big { color: var(--color-mgo); }
+    .fuel-col.mgo  .fc-dot  { background: var(--color-mgo-band); }
+    .fuel-col.lsfo .fc-type, .fuel-col.lsfo .fc-big { color: var(--color-lsfo); }
+    .fuel-col.lsfo .fc-dot  { background: var(--color-lsfo-band); }
+    .dark .fuel-col.hfo  .fc-type, .dark .fuel-col.hfo  .fc-big { color: var(--color-hfo-band); }
+    .dark .fuel-col.mgo  .fc-type, .dark .fuel-col.mgo  .fc-big { color: var(--color-mgo-band); }
+    .dark .fuel-col.lsfo .fc-type, .dark .fuel-col.lsfo .fc-big { color: var(--color-lsfo-band); }
+
+    .water-rows, .chem-rows, .lube-rows { display: grid; gap: 4px; }
+    .water-row, .chem-row, .lube-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.85rem; }
+    .water-row .wr-label, .chem-row .cr-label, .lube-row .lr-label { color: var(--color-dim); }
+    .water-row .wr-val { font-weight: 800; font-size: 1.15rem; color: var(--color-water); font-family: 'IBM Plex Mono', monospace; }
+    .chem-row  .cr-val { font-weight: 800; font-size: 1.15rem; color: var(--color-chem);  font-family: 'IBM Plex Mono', monospace; }
+    .lube-row  .lr-val { font-weight: 800; font-size: 1.15rem; color: var(--color-lube);  font-family: 'IBM Plex Mono', monospace; }
+    .dark .water-row .wr-val { color: var(--color-water-band); }
+    .dark .chem-row  .cr-val { color: var(--color-chem-band); }
+    .dark .lube-row  .lr-val { color: var(--color-lube-band); }
+    .dark .water-row .wr-label, .dark .chem-row .cr-label, .dark .lube-row .lr-label { color: #94a3b8; }
+
+    .table-row { transition: background 0.15s ease; }
+    tr.table-row.fuel-row-hfo  { background-color: var(--color-hfo-light); }
+    tr.table-row.fuel-row-mgo  { background-color: var(--color-mgo-light); }
+    tr.table-row.fuel-row-lsfo { background-color: var(--color-lsfo-light); }
+    .dark tr.table-row.fuel-row-hfo  { background-color: rgba(217,119,6,0.08); }
+    .dark tr.table-row.fuel-row-mgo  { background-color: rgba(5,150,105,0.08); }
+    .dark tr.table-row.fuel-row-lsfo { background-color: rgba(99,102,241,0.08); }
+    tr.table-row.fuel-row-hfo:hover  { background: #FEF3C7 !important; }
+    tr.table-row.fuel-row-mgo:hover  { background: #D1FAE5 !important; }
+    tr.table-row.fuel-row-lsfo:hover { background: #E0E7FF !important; }
+
+    tr.fuel-row-hfo  .eq-mt:not(.zero) { color: var(--color-hfo); }
+    tr.fuel-row-mgo  .eq-mt:not(.zero) { color: var(--color-mgo); }
+    tr.fuel-row-lsfo .eq-mt:not(.zero) { color: var(--color-lsfo); }
+    .eq-mt.zero { color: var(--color-faint); }
+
+    .flag-band { width: 5px; height: 28px; border-radius: 2px; margin-right: 8px; flex-shrink: 0; display: inline-block; }
+    .flag-band.hfo  { background: var(--color-hfo-band); }
+    .flag-band.mgo  { background: var(--color-mgo-band); }
+    .flag-band.lsfo { background: var(--color-lsfo-band); }
+
+    .ptotals { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 2px solid var(--color-border-subtle); }
+    .pt-block { padding: 0.75rem 1.25rem; border-right: 1px solid var(--color-border-subtle); }
+    .pt-block:last-child { border-right: none; }
+    .pt-head  { font-size: 0.5rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--color-faint); margin-bottom: 0.4rem; }
+    .pt-line  { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 0.82rem; }
+    .pt-label { display: flex; align-items: center; gap: 6px; color: var(--color-dim); }
+    .pt-dot   { width: 8px; height: 8px; border-radius: 2px; }
+    .pt-val   { font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+    .pt-noval { color: var(--color-faint); font-style: italic; font-size: 0.78rem; }
+
+    .phase-remarks { padding: 0.65rem 1.25rem; font-size: 0.78rem; color: var(--color-dim); font-style: italic; background: var(--color-surface2); border-top: 1px solid var(--color-border-subtle); }
+
+    .vr-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+    .vr-col { padding: 0.75rem 1rem; border-right: 1px solid var(--color-border-subtle); }
+    .vr-col:last-child { border-right: none; }
+    .vr-col-head { font-size: 0.5rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--color-water); margin-bottom: 0.6rem; }
+    .vr-sub-head { font-size: 0.5rem; font-weight: 700; letter-spacing: 1px;   text-transform: uppercase; color: var(--color-faint); margin-top: 0.6rem; margin-bottom: 0.3rem; }
+    .vr-field    { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; align-items: end; margin-bottom: 0.4rem; }
+    .vr-calc     { font-size: 0.72rem; font-weight: 700; color: var(--color-water); padding: 0.4rem 0.6rem; background: rgba(2,132,199,0.06); border-radius: 6px; text-align: center; font-family: 'IBM Plex Mono', monospace; }
+
+    .form-label { display: block; font-size: 0.55rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--color-faint); margin-bottom: 0.4rem; }
+    .form-input { width: 100%; padding: 0.6rem 0.85rem; background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: 8px; font-size: 0.85rem; color: var(--color-text); transition: all 0.15s ease; }
+    .form-input:focus { outline: none; border-color: var(--color-ocean-500); box-shadow: 0 0 0 3px rgba(6,182,212,0.1); }
+    .form-input.mono  { font-family: 'IBM Plex Mono', monospace; }
+    .dark .form-input { background: rgba(30,41,59,0.6); border-color: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+    .section-label { font-size: 0.55rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-faint); }
+    .section-divider { height: 1px; background: var(--color-border-subtle); margin: 1.5rem 0; }
+    .dark .section-divider { background: rgba(255,255,255,0.08); }
+
+    .leg-head, .report-head { background: var(--color-surface2); border-bottom: 1px solid var(--color-border-subtle); }
+    .dark .leg-head, .dark .report-head { background: rgba(30,41,59,0.5); border-bottom-color: rgba(255,255,255,0.08); }
+
+    .total-pill { padding: 0.3rem 0.85rem; border-radius: 8px; font-weight: 700; font-size: 0.82rem; background: var(--color-surface); border: 1px solid var(--color-border-subtle); color: var(--color-text); font-family: 'IBM Plex Mono', monospace; }
+    .dark .total-pill { background: rgba(30,41,59,0.6); border-color: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+
+    .btn-primary { background: var(--color-ocean-500); color: white; font-weight: 600; padding: 0.55rem 1rem; border-radius: 10px; transition: all 0.2s ease; }
+    .btn-primary:hover { background: var(--color-ocean-600); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(6,182,212,0.25); }
+    .btn-flat { background: var(--color-surface); border: 1px solid var(--color-border-subtle); color: var(--color-text); font-weight: 600; padding: 0.5rem 0.9rem; border-radius: 10px; transition: all 0.15s ease; }
+    .btn-flat:hover { background: var(--color-surface2); border-color: var(--color-dim); }
+    .dark .btn-flat { background: rgba(30,41,59,0.6); border-color: rgba(255,255,255,0.1); color: #e2e8f0; }
+    .dark .btn-flat:hover { background: rgba(30,41,59,0.9); border-color: rgba(255,255,255,0.2); }
+    .btn-danger  { background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; font-weight: 600; padding: 0.5rem 0.9rem; border-radius: 10px; }
+    .btn-danger:hover { background: #FEE2E2; }
+    .btn-success { background: var(--color-mgo);      color: white; font-weight: 600; padding: 0.5rem 0.9rem; border-radius: 10px; }
+    .btn-warning { background: var(--color-hfo-band); color: white; font-weight: 600; padding: 0.5rem 0.9rem; border-radius: 10px; }
+
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; animation: pulse 2s infinite; }
+    .status-dot.connected    { background: #10b981; }
+    .status-dot.disconnected { background: #f59e0b; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .tree-node { display: flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.5rem; border-radius: 7px; cursor: pointer; font-size: 0.82rem; color: var(--color-text); transition: background 0.12s ease; user-select: none; }
+    .tree-node:hover { background: var(--color-surface2); }
+    .tree-node.selected { background: rgba(6,182,212,0.1); color: var(--color-ocean-600); font-weight: 600; }
+    .dark .tree-node { color: #cbd5e1; }
+    .dark .tree-node:hover { background: rgba(255,255,255,0.04); }
+    .dark .tree-node.selected { background: rgba(34,211,238,0.12); color: var(--color-ocean-400); }
+    .tree-chev { width: 14px; color: var(--color-faint); display: inline-flex; justify-content: center; flex: none; }
+    .tree-icon { width: 16px; color: var(--color-dim);   display: inline-flex; justify-content: center; flex: none; }
+    .tree-dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--color-hfo-band); margin-left: auto; flex: none; }
+
+    .fuel-change-insert { display: flex; justify-content: center; padding: 0.65rem 1.25rem; position: relative; }
+    .fuel-change-insert::before { content: ''; position: absolute; left: 1.25rem; right: 1.25rem; top: 50%; height: 1px; background-image: linear-gradient(90deg, var(--color-border-subtle) 50%, transparent 50%); background-size: 8px 1px; }
+    .fuel-change-insert button {
+      position: relative; z-index: 1;
+      font-size: 0.6rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+      padding: 0.35rem 0.85rem; border-radius: 9999px;
+      background: var(--color-surface); border: 1px dashed var(--color-ocean-500);
+      color: var(--color-ocean-600); transition: all 0.15s ease;
+    }
+    .fuel-change-insert button:hover { background: rgba(6,182,212,0.06); }
+    .dark .fuel-change-insert button { background: rgba(30,41,59,0.7); color: var(--color-ocean-400); border-color: var(--color-ocean-400); }
+
+    .fuel-badge { display: inline-flex; align-items: center; gap: 6px; padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; font-family: 'IBM Plex Mono', monospace; min-width: 78px; justify-content: center; }
+    .fuel-badge.hfo  { background: rgba(245,158,11,0.18); color: var(--color-hfo);  border: 1px solid rgba(245,158,11,0.4); }
+    .fuel-badge.mgo  { background: rgba(16,185,129,0.18); color: var(--color-mgo);  border: 1px solid rgba(16,185,129,0.4); }
+    .fuel-badge.lsfo { background: rgba(129,140,248,0.18); color: var(--color-lsfo); border: 1px solid rgba(129,140,248,0.4); }
+    .fuel-badge .lock-ico { font-size: 0.65rem; opacity: 0.75; }
+    .dark .fuel-badge.hfo  { color: var(--color-hfo-band); }
+    .dark .fuel-badge.mgo  { color: var(--color-mgo-band); }
+    .dark .fuel-badge.lsfo { color: var(--color-lsfo-band); }
+
+    /* Fuel selector — styled like fuel-badge but as a <select> */
+    .fuel-select {
+      appearance: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0.3rem 1.6rem 0.3rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px;
+      font-family: 'IBM Plex Mono', monospace;
+      min-width: 78px;
+      cursor: pointer;
+      background-repeat: no-repeat;
+      background-position: right 0.45rem center;
+      transition: all 0.15s ease;
+    }
+    .fuel-select:focus { outline: none; box-shadow: 0 0 0 3px rgba(6,182,212,0.18); }
+    .fuel-select.hfo  { background-color: rgba(245,158,11,0.18);  color: var(--color-hfo);  border: 1px solid rgba(245,158,11,0.4);
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='none' stroke='%23D97706' stroke-width='1.6' d='M1 1l4 4 4-4'/></svg>"); }
+    .fuel-select.mgo  { background-color: rgba(16,185,129,0.18);  color: var(--color-mgo);  border: 1px solid rgba(16,185,129,0.4);
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='none' stroke='%23059669' stroke-width='1.6' d='M1 1l4 4 4-4'/></svg>"); }
+    .fuel-select.lsfo { background-color: rgba(129,140,248,0.18); color: var(--color-lsfo); border: 1px solid rgba(129,140,248,0.4);
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='none' stroke='%236366F1' stroke-width='1.6' d='M1 1l4 4 4-4'/></svg>"); }
+    .fuel-select:hover { filter: brightness(0.98); }
+    .dark .fuel-select.hfo  { color: var(--color-hfo-band); }
+    .dark .fuel-select.mgo  { color: var(--color-mgo-band); }
+    .dark .fuel-select.lsfo { color: var(--color-lsfo-band); }
+
+    .app-footer { font-size: 0.6rem; letter-spacing: 0.5px; color: var(--color-faint); }
+    .dark .app-footer { color: rgba(148,163,184,0.4); }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-content { background: white; border-radius: 16px; max-width: 640px; width: calc(100% - 40px); max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    .dark .modal-content { background: #1e293b; }
+    .modal-head { background: var(--color-surface2); border-bottom: 1px solid var(--color-border-subtle); padding: 1.1rem 1.4rem; border-radius: 16px 16px 0 0; }
+    .dark .modal-head { background: rgba(30,41,59,0.8); border-bottom-color: rgba(255,255,255,0.08); }
+    .modal-head h2 { color: var(--color-text); font-weight: 700; font-size: 1.05rem; }
+    .dark .modal-head h2 { color: #e2e8f0; }
+
+    .lock-overlay { position: fixed; inset: 0; background: rgba(10,25,41,0.6); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1100; }
+
+    select.form-input { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='none' stroke='%236B7B8F' stroke-width='1.5' d='M1 1l5 5 5-5'/></svg>"); background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2rem; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    // ─────────────────────────────────────────────
+    // Fake data
+    // ─────────────────────────────────────────────
+    const SHIPS = [
+      { id: 'solstice',   code: 'SL', displayName: 'Celebrity Solstice',   yearBuilt: 2008, pin: '4815' },
+      { id: 'equinox',    code: 'EQ', displayName: 'Celebrity Equinox',    yearBuilt: 2009, pin: '2734' },
+      { id: 'eclipse',    code: 'EC', displayName: 'Celebrity Eclipse',    yearBuilt: 2010, pin: '7106' },
+      { id: 'silhouette', code: 'SI', displayName: 'Celebrity Silhouette', yearBuilt: 2011, pin: '5293' },
+      { id: 'reflection', code: 'RF', displayName: 'Celebrity Reflection', yearBuilt: 2012, pin: '8362' },
+    ];
+    const EQUIPMENT = [
+      { key: 'dg12',    label: 'DG 1-2',   fuel: 'hfo', locked: false, allowed: ['hfo','mgo','lsfo'] },
+      { key: 'dg4',     label: 'DG 4',     fuel: 'hfo', locked: false, allowed: ['hfo','mgo','lsfo'] },
+      { key: 'dg3',     label: 'DG 3',     fuel: 'mgo', locked: false, allowed: ['mgo','lsfo']      },
+      { key: 'boiler1', label: 'Boiler 1', fuel: 'mgo', locked: true,  allowed: ['mgo']             },
+      { key: 'boiler2', label: 'Boiler 2', fuel: 'mgo', locked: true,  allowed: ['mgo']             },
+    ];
+    const VOYAGES = [
+      {
+        id: 'v1', name: 'Singapore → Hong Kong', startDate: '2026-03-12', endDate: '2026-03-28',
+        status: 'active', dirty: true,
+        legs: [
+          { id: 'l1a', from: 'Singapore',        to: 'Ho Chi Minh City', dep: '2026-03-12', arr: '2026-03-15' },
+          { id: 'l1b', from: 'Ho Chi Minh City', to: 'Hong Kong',        dep: '2026-03-18', arr: '2026-03-22' },
+          { id: 'l1c', from: 'Hong Kong',        to: 'Shanghai',         dep: '2026-03-24', arr: '2026-03-28' },
+        ],
+        totals: { hfo: 284.31, mgo: 41.08, lsfo: 18.62 }
+      },
+      {
+        id: 'v2', name: 'Shanghai → Yokohama', startDate: '2026-02-18', endDate: '2026-02-27',
+        status: 'ended', dirty: false,
+        legs: [
+          { id: 'l2a', from: 'Shanghai', to: 'Busan',    dep: '2026-02-18', arr: '2026-02-21' },
+          { id: 'l2b', from: 'Busan',    to: 'Yokohama', dep: '2026-02-23', arr: '2026-02-27' },
+        ],
+        totals: { hfo: 196.04, mgo: 28.77, lsfo: 12.44 }
+      },
+      {
+        id: 'v3', name: 'Sydney → Auckland', startDate: '2026-01-05', endDate: '2026-01-14',
+        status: 'ended', dirty: false,
+        legs: [
+          { id: 'l3a', from: 'Sydney',     to: 'Wellington', dep: '2026-01-05', arr: '2026-01-09' },
+          { id: 'l3b', from: 'Wellington', to: 'Auckland',   dep: '2026-01-11', arr: '2026-01-14' },
+        ],
+        totals: { hfo: 164.12, mgo: 23.56, lsfo: 10.03 }
+      }
+    ];
+
+    // ─────────────────────────────────────────────
+    // State
+    // ─────────────────────────────────────────────
+    const state = {
+      view: 'landing',              // landing | main
+      shipId: 'solstice',
+      editMode: false,              // false = read-only; true = editing
+      editor: null,                 // null | 'chief' | 'second' | 'other'
+      editMinutesLeft: 30,          // cosmetic countdown shown in top bar
+      selected: { voyageId: 'v1', detailNode: 'voyageDetail', legId: null, reportType: null },
+      expanded: new Set(['v1']),
+      modal: null,                  // null | 'enableEdit' | 'admin' | 'newVoyage' | 'addLeg' | 'endVoyage' | 'conflict'
+      filter: 'active',             // active | ended | all
+      sidebarOpen: true,
+      dark: false,
+      saveStatus: 'saved',          // saved | saving | offline
+      pinError: null,               // null | { msg }
+      rotate: null,                 // { shipId, step: 'enter'|'success', newPin?, error? }
+    };
+
+    if (location.hash === '#conflict') state.modal = 'conflict';
+
+    // ─────────────────────────────────────────────
+    // Render
+    // ─────────────────────────────────────────────
+    const root = document.getElementById('root');
+    function render() {
+      document.documentElement.classList.toggle('dark', state.dark);
+      if (state.view === 'landing') root.innerHTML = renderLanding();
+      else root.innerHTML = renderMain();
+      bind();
+    }
+
+    function renderLanding() {
+      return `
+        <div class="w-full h-full flex items-center justify-center p-6" style="background: linear-gradient(180deg, var(--color-landing-bg-from) 0%, var(--color-landing-bg-mid) 55%, var(--color-landing-bg-to) 100%);">
+          <div class="w-full max-w-md glass-card rounded-2xl p-8" style="box-shadow: 0 18px 48px rgba(17,40,63,0.10);">
+            <div class="flex items-center gap-3 mb-6">
+              <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--color-ocean-500), var(--color-water));">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 18l2-6h14l2 6M5 12V6l7-3 7 3v6"/><path d="M3 21h18"/></svg>
+              </div>
+              <div>
+                <div class="font-mono text-[0.6rem] tracking-[2px] uppercase" style="color: var(--color-faint);">Voyage Tracker</div>
+                <div class="text-[1.3rem] font-extrabold tracking-tight" style="color: var(--color-text);">Open</div>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label">Ship</label>
+              <select id="ship-select" class="form-input">
+                ${SHIPS.map(s => `<option value="${s.id}" ${s.id===state.shipId?'selected':''}>${s.displayName} (${s.yearBuilt})</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="mb-4">
+              <div class="form-label flex items-center justify-between mb-1.5">
+                <span>Edit Mode <span class="text-[0.6rem] font-normal" style="color: var(--color-faint);">(optional)</span></span>
+                <span class="text-[0.62rem] font-normal normal-case tracking-normal" style="color: var(--color-faint);">leave blank for view only</span>
+              </div>
+              <select id="edit-as-landing" class="form-input !text-[0.82rem] mb-2">
+                <option value="chief">Chief Engineer</option>
+                <option value="second">2nd Engineer (ECR)</option>
+                <option value="bridge">Bridge Officer on Watch</option>
+                <option value="other">Other</option>
+              </select>
+              <div class="flex gap-2 justify-center">
+                ${[0,1,2,3].map(i => `<input class="form-input mono text-center !p-0 !text-[1.2rem] !font-extrabold" maxlength="1" inputmode="numeric" style="width: 2.8rem; height: 2.8rem; ${state.pinError ? 'border-color: var(--color-fuel-band);' : ''}" placeholder="•" data-pin="${i}" />`).join('')}
+              </div>
+              ${state.pinError ? `
+                <div class="mt-2 rounded-md px-3 py-2 text-[0.72rem]" style="background: var(--color-error-bg); border: 1px solid var(--color-error-border); color: var(--color-error-fg);">
+                  <strong>${state.pinError.msg}</strong>
+                </div>
+              ` : ''}
+            </div>
+
+            <button id="btn-open" class="btn-primary w-full mb-3">Open Voyage Tracker →</button>
+
+            <div class="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg" style="background: var(--color-surface2);">
+              <span class="text-[0.85rem]">💡</span>
+              <p class="text-[0.7rem] leading-snug" style="color: var(--color-dim);">
+                Type the ship PIN to open in <strong style="color: var(--color-hfo-band);">Edit Mode</strong> directly. Skip it to open in <strong style="color: var(--color-text);">View Only</strong> — you can enable editing later from the top bar.
+              </p>
+            </div>
+
+            <div class="mt-6 pt-4 border-t" style="border-color: var(--color-border-subtle);">
+              <div class="section-label mb-1.5">About</div>
+              <p class="text-[0.72rem] leading-relaxed" style="color: var(--color-dim);">
+                Trusted-PC model — your Windows session is your identity. No passwords for read access; a short PIN gates edits to prevent accidental changes.
+              </p>
+              <div class="mt-3 text-[0.7rem]"><a href="#" id="btn-admin-login" class="hover:underline" style="color: var(--color-ocean-600);">Admin →</a></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMain() {
+      const ship = SHIPS.find(s => s.id === state.shipId);
+      const voyages = VOYAGES.filter(v =>
+        state.filter === 'all' ? true : state.filter === 'active' ? v.status === 'active' : v.status === 'ended'
+      );
+      return `
+        <div class="h-screen flex flex-col" style="background: var(--color-bg);">
+          ${renderTopBar(ship)}
+          <div class="flex-1 flex min-h-0 overflow-hidden">
+            ${state.sidebarOpen ? renderSidebar(voyages) : ''}
+            <main class="flex-1 overflow-y-auto min-h-0">
+              ${!state.editMode ? `
+                <div class="max-w-[1100px] mx-auto px-5 pt-4">
+                  <div class="rounded-xl px-4 py-2 flex items-center gap-2.5" style="background: var(--color-warn-bg); border: 1px solid var(--color-warn-border);">
+                    <span class="text-[0.95rem]">👁</span>
+                    <div class="text-[0.75rem]" style="color: var(--color-dim);">
+                      <strong style="color: var(--color-text);">View Only.</strong> Use <span class="badge mono" style="background: rgba(245,158,11,0.15); color: var(--color-hfo-band); font-size: 0.62rem; padding: 0.1rem 0.4rem;">✎ Enable Edit Mode</span> in the top bar to make changes.
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
+              <div class="max-w-[1100px] mx-auto p-5">
+                ${renderDetail()}
+              </div>
+              <div class="max-w-[1100px] mx-auto px-5 pb-5 app-footer flex justify-between">
+                <span>Voyage Tracker v7 · mockup build</span>
+                <span>Signal Flag Bands theme</span>
+              </div>
+            </main>
+          </div>
+          ${state.modal === 'enableEdit' ? renderEnableEditModal() : ''}
+          ${state.modal === 'admin'      ? renderAdminModal()      : ''}
+          ${state.modal === 'rotatePin'  ? renderRotatePinModal()  : ''}
+          ${state.modal === 'newVoyage'  ? renderNewVoyageModal()  : ''}
+          ${state.modal === 'addLeg'     ? renderAddLegModal()     : ''}
+          ${state.modal === 'endVoyage'  ? renderEndVoyageModal()  : ''}
+          ${state.modal === 'conflict'   ? renderConflictModal()   : ''}
+        </div>
+      `;
+    }
+
+    function renderTopBar(ship) {
+      const statusLabel = state.saveStatus === 'saving' ? 'Saving…' : state.saveStatus === 'offline' ? 'Offline – queued' : 'Saved';
+      const statusDot   = state.saveStatus === 'saved'  ? 'connected' : 'disconnected';
+      return `
+        <header class="shrink-0 glass" style="border-bottom: 1px solid var(--color-border-subtle);">
+          <div class="h-14 px-4 flex items-center gap-3">
+            <button id="btn-toggle-sidebar" class="btn-flat !p-2 !rounded-lg" title="Toggle sidebar" aria-label="Toggle sidebar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+            </button>
+
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, var(--color-ocean-500), var(--color-water));">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 18l2-6h14l2 6M5 12V6l7-3 7 3v6"/><path d="M3 21h18"/></svg>
+            </div>
+            <div class="flex flex-col leading-tight">
+              <span class="text-[0.55rem] tracking-[2px] uppercase font-bold" style="color: var(--color-faint);">Voyage Tracker</span>
+              <span class="font-extrabold text-[0.95rem]" style="color: var(--color-text);">${ship.displayName}</span>
+            </div>
+
+            ${state.editMode
+              ? `<span class="badge ml-2" style="background: rgba(245,158,11,0.15); color: var(--color-hfo-band); border: 1px solid rgba(245,158,11,0.35);" title="Edit session active">
+                  ✎ Edit Mode · ${state.editor === 'chief' ? 'Chief' : state.editor === 'second' ? '2nd Eng.' : state.editor === 'bridge' ? 'Bridge OOW' : 'Other'} · ${state.editMinutesLeft} min
+                </span>`
+              : `<span class="badge ml-2" style="background: var(--color-surface2); color: var(--color-dim); border: 1px solid var(--color-border-subtle);" title="Read-only — enable edit mode to make changes">
+                  👁 View Only
+                </span>`}
+
+            <div class="flex-1"></div>
+
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg" style="background: var(--color-surface2);">
+              <span class="status-dot ${statusDot}"></span>
+              <span class="text-[0.72rem] font-mono" style="color: var(--color-dim);">${statusLabel}</span>
+            </div>
+
+            ${state.editMode
+              ? `<button id="btn-new-voyage" class="btn-primary !text-[0.78rem]">+ New Voyage</button>
+                 <button id="btn-exit-edit" class="btn-flat !text-[0.78rem]" title="Exit edit mode">✕ Exit Edit</button>`
+              : `<button id="btn-enable-edit" class="btn-warning !text-[0.78rem] shadow-sm" title="Enable edit mode with the ship PIN">✎ Enable Edit Mode</button>`}
+
+            <div class="flex items-center gap-1 pl-2 ml-1 border-l" style="border-color: var(--color-border-subtle);">
+              <button id="btn-admin"  class="btn-flat !p-2 !rounded-lg" title="Admin panel" aria-label="Admin">⚙</button>
+              <button id="btn-dark"   class="btn-flat !p-2 !rounded-lg" title="Toggle theme" aria-label="Theme">${state.dark ? '☀' : '🌙'}</button>
+              <button id="btn-logout" class="btn-flat !p-2 !rounded-lg" title="Close (return to landing)" aria-label="Close">⇦</button>
+            </div>
+          </div>
+        </header>
+      `;
+    }
+
+    function renderSidebar(voyages) {
+      return `
+        <aside class="w-[320px] shrink-0 flex flex-col overflow-hidden border-r" style="background: var(--color-surface); border-color: var(--color-border-subtle);">
+          <div class="shrink-0 p-3 border-b" style="border-color: var(--color-border-subtle);">
+            <div class="flex items-center gap-2 mb-2">
+              <input id="tree-search" type="text" placeholder="Search voyages…" class="form-input !py-1.5 !text-[0.78rem]" />
+              <button id="btn-refresh" class="btn-flat !p-2 !rounded-lg" title="Refresh" aria-label="Refresh">↻</button>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="inline-flex p-0.5 rounded-lg" style="background: var(--color-surface2);">
+                ${['active','ended','all'].map(f => `
+                  <button data-filter="${f}" class="text-[0.65rem] font-bold tracking-[1px] uppercase px-2.5 py-1 rounded-md transition-colors whitespace-nowrap"
+                    style="${state.filter===f ? 'background: var(--color-ocean-500); color:white; box-shadow: 0 1px 2px rgba(0,0,0,0.08);' : 'background: transparent; color: var(--color-dim);'}">${f}</button>
+                `).join('')}
+              </div>
+              <div class="inline-flex gap-0.5">
+                <button id="btn-expand-all"   class="btn-flat !p-1.5 !rounded-md !text-[0.85rem] leading-none" title="Expand all" aria-label="Expand all">⊞</button>
+                <button id="btn-collapse-all" class="btn-flat !p-1.5 !rounded-md !text-[0.85rem] leading-none" title="Collapse all" aria-label="Collapse all">⊟</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto min-h-0 p-2" role="tree" aria-label="Voyages">
+            ${voyages.length === 0
+              ? `<div class="p-6 text-center text-[0.78rem]" style="color: var(--color-dim);">No voyages match this filter.</div>`
+              : voyages.map(v => renderVoyageNode(v)).join('')}
+          </div>
+
+          <div class="shrink-0 px-3 py-2 border-t text-[0.65rem] font-mono flex items-center justify-between" style="border-color: var(--color-border-subtle); color: var(--color-faint);">
+            <span>${voyages.length} voyage${voyages.length===1?'':'s'}</span>
+            <span>data/${state.shipId}/</span>
+          </div>
+        </aside>
+      `;
+    }
+
+    function renderVoyageNode(v) {
+      const isExpanded = state.expanded.has(v.id);
+      const isSelected = state.selected.voyageId === v.id && !state.selected.legId && !state.selected.detailNode;
+      const statusBadge = v.status === 'ended'
+        ? `<span class="badge" style="background: rgba(107,123,143,0.1); color: var(--color-dim); font-size: 0.6rem;">Ended</span>`
+        : `<span class="badge" style="background: rgba(16,185,129,0.1); color: var(--color-mgo); font-size: 0.6rem;">Active</span>`;
+      return `
+        <div role="treeitem" aria-expanded="${isExpanded}">
+          <div class="tree-node ${isSelected ? 'selected' : ''}" data-voyage="${v.id}" data-action="select-voyage">
+            <span class="tree-chev" data-voyage="${v.id}" data-action="toggle-voyage">${isExpanded ? '▾' : '▸'}</span>
+            <span class="tree-icon">⚓</span>
+            <span class="flex-1 truncate">${v.name}</span>
+            ${v.dirty ? '<span class="tree-dirty" title="Unsaved changes"></span>' : ''}
+          </div>
+          <div class="ml-4 pl-2 border-l" style="border-color: var(--color-border-subtle); ${isExpanded ? '' : 'display:none;'}">
+            <div class="tree-node ${state.selected.voyageId===v.id && state.selected.detailNode==='voyageDetail' ? 'selected' : ''}"
+                 data-voyage="${v.id}" data-action="select-detail">
+              <span class="tree-chev"></span>
+              <span class="tree-icon">▤</span>
+              <span class="truncate">Voyage Detail</span>
+              <div class="ml-auto">${statusBadge}</div>
+            </div>
+            ${v.legs.map(leg => renderLegNode(v, leg)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLegNode(v, leg) {
+      const isExpanded = state.expanded.has(leg.id);
+      return `
+        <div role="treeitem" aria-expanded="${isExpanded}">
+          <div class="tree-node" data-voyage="${v.id}" data-leg="${leg.id}" data-action="toggle-leg">
+            <span class="tree-chev">${isExpanded ? '▾' : '▸'}</span>
+            <span class="tree-icon">⇆</span>
+            <span class="flex-1 truncate">${leg.from} → ${leg.to}</span>
+          </div>
+          <div class="ml-4 pl-2 border-l" style="border-color: var(--color-border-subtle); ${isExpanded ? '' : 'display:none;'}">
+            ${['departure','arrival','voyageReport'].map(rt => {
+              const isR = state.selected.voyageId===v.id && state.selected.legId===leg.id && state.selected.reportType===rt;
+              const label = rt==='departure'?'Departure':rt==='arrival'?'Arrival':'Voyage Report';
+              const icon  = rt==='departure'?'↗':rt==='arrival'?'↘':'⎈';
+              return `
+                <div class="tree-node ${isR ? 'selected' : ''}" data-voyage="${v.id}" data-leg="${leg.id}" data-report="${rt}" data-action="select-report">
+                  <span class="tree-chev"></span>
+                  <span class="tree-icon">${icon}</span>
+                  <span class="truncate">${label}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // ─────────────────────────────────────────────
+    // Detail pane
+    // ─────────────────────────────────────────────
+    function renderDetail() {
+      const { voyageId, legId, reportType } = state.selected;
+      const v = VOYAGES.find(x => x.id === voyageId);
+      if (!v) return renderEmpty();
+      if (legId && reportType === 'voyageReport')         return renderVoyageReport(v, v.legs.find(l=>l.id===legId));
+      if (legId && reportType)                            return renderReportForm(v, v.legs.find(l=>l.id===legId), reportType);
+      return renderVoyageDetail(v);
+    }
+
+    function renderEmpty() {
+      return `
+        <div class="glass-card rounded-2xl p-10 text-center">
+          <div class="text-5xl mb-4">⚓</div>
+          <h2 class="text-lg font-extrabold mb-2" style="color: var(--color-text);">Pick a voyage</h2>
+          <p class="text-[0.85rem]" style="color: var(--color-dim);">Click a voyage in the tree to see its detail.</p>
+        </div>
+      `;
+    }
+
+    function renderVoyageDetail(v) {
+      const statusBadge = v.status === 'ended'
+        ? `<span class="badge" style="background: rgba(107,123,143,0.15); color: var(--color-dim);">Ended</span>`
+        : `<span class="badge" style="background: rgba(16,185,129,0.15); color: var(--color-mgo);">Active</span>`;
+      return `
+        <!-- Cruise info card -->
+        <section class="glass-card rounded-2xl overflow-hidden mb-5">
+          <div class="leg-head px-5 py-4 flex items-center gap-3">
+            <div class="text-[1.1rem] font-extrabold tracking-tight" style="color: var(--color-text);">${v.name}</div>
+            ${statusBadge}
+            <div class="flex-1"></div>
+            ${state.editMode
+              ? (v.status === 'active'
+                  ? `<button class="btn-warning !py-1.5 !px-3 !text-[0.78rem] shadow-sm" data-action="end-voyage" title="Finalize voyage and record lub-oil">⚑ End Voyage</button>`
+                  : `<button class="btn-flat !py-1.5 !px-3 !text-[0.78rem]" data-action="reopen-voyage" title="Reopen voyage for editing">↶ Reopen</button>`)
+              : ''}
+            <div class="total-pill">${v.startDate}_${v.name.replace(/ → | /g,'_')}.json</div>
+          </div>
+          <div class="p-5 grid grid-cols-3 gap-5">
+            <div><div class="form-label">Voyage name</div><input class="form-input" value="${v.name}" /></div>
+            <div><div class="form-label">Start date</div><input class="form-input mono" type="date" value="${v.startDate}" /></div>
+            <div><div class="form-label">End date</div><input class="form-input mono" type="date" value="${v.endDate}" /></div>
+          </div>
+        </section>
+
+        <!-- Summary grid -->
+        <div class="section-label mb-3">Cruise Summary</div>
+        <section class="grid grid-cols-3 gap-[14px] mb-5">
+          <div class="cat-card fuel" style="grid-column: span 3;">
+            <div class="cat-label">Fuel Consumption <span class="ml-auto mono text-[0.65rem] font-semibold" style="color: var(--color-dim);">MT · all legs</span></div>
+            <div class="cat-body">
+              <div class="fuel-cols">
+                <div class="fuel-col hfo"><div class="fc-type"><span class="fc-dot"></span>HFO</div><div class="fc-big">${v.totals.hfo.toFixed(2)}</div><div class="fc-rob">ROB 1240 MT</div></div>
+                <div class="fuel-col mgo"><div class="fc-type"><span class="fc-dot"></span>MGO</div><div class="fc-big">${v.totals.mgo.toFixed(2)}</div><div class="fc-rob">ROB  185 MT</div></div>
+                <div class="fuel-col lsfo"><div class="fc-type"><span class="fc-dot"></span>LSFO</div><div class="fc-big">${v.totals.lsfo.toFixed(2)}</div><div class="fc-rob">ROB  420 MT</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="cat-card water">
+            <div class="cat-label">Fresh Water</div>
+            <div class="cat-body water-rows">
+              <div class="water-row"><span class="wr-label">ROB</span><span class="wr-val">1 120</span></div>
+              <div class="water-row"><span class="wr-label">Produced</span><span class="wr-val">320</span></div>
+              <div class="water-row"><span class="wr-label">Consumed</span><span class="wr-val">286</span></div>
+            </div>
+          </div>
+          <div class="cat-card chem">
+            <div class="cat-label">Chemicals
+              <span class="ml-auto" style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;background:var(--color-chem-band);color:#fff;border-radius:3px;font-size:9px;font-weight:700;">!</span>
+            </div>
+            <div class="cat-body chem-rows">
+              <div class="chem-row"><span class="cr-label">NaOH cons</span><span class="cr-val">42 L</span></div>
+              <div class="chem-row"><span class="cr-label">NaOH ROB</span><span class="cr-val">310 L</span></div>
+            </div>
+          </div>
+          <div class="cat-card lube">
+            <div class="cat-label">Lub-Oil</div>
+            <div class="cat-body lube-rows">
+              <div class="lube-row"><span class="lr-label">ME cons</span><span class="lr-val">86 L</span></div>
+              <div class="lube-row"><span class="lr-label">13S/14S</span><span class="lr-val">12 L</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Densities -->
+        <section class="glass-card rounded-2xl p-5 mb-5">
+          <div class="flex items-center mb-3">
+            <div class="section-label">Fuel Densities <span class="mono ml-2" style="color: var(--color-dim);">t/m³ @ 30 °C</span></div>
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div><div class="form-label">HFO</div><input class="form-input mono" value="0.920" /></div>
+            <div><div class="form-label">MGO</div><input class="form-input mono" value="0.830" /></div>
+            <div><div class="form-label">LSFO</div><input class="form-input mono" value="0.920" /></div>
+          </div>
+        </section>
+
+        <!-- Legs -->
+        <div class="section-label mb-3">Legs</div>
+        <div class="cat-card legs">
+          <div class="cat-label flex items-center">
+            <span>${v.legs.length} Legs</span>
+            ${state.editMode && v.status === 'active'
+              ? `<button class="btn-primary ml-auto !py-1 !px-2.5 !text-[0.72rem] !rounded-md shadow-sm" data-action="add-leg" title="Add a new leg to this voyage">+ Add Leg</button>`
+              : ''}
+          </div>
+          <div class="cat-body">
+            <div class="divide-y" style="border-color: var(--color-border-subtle);">
+              ${v.legs.map((leg,i) => `
+                <div class="py-2.5 flex items-center gap-3 cursor-pointer hover:bg-black/[0.02]" data-leg-jump="${leg.id}">
+                  <div class="w-7 h-7 rounded-md flex items-center justify-center font-mono text-[0.7rem] font-bold" style="background: var(--color-surface2); color: var(--color-dim);">${i+1}</div>
+                  <div class="flex-1">
+                    <div class="font-semibold text-[0.88rem]" style="color: var(--color-text);">${leg.from} → ${leg.to}</div>
+                    <div class="text-[0.7rem] mono" style="color: var(--color-dim);">${leg.dep} → ${leg.arr}</div>
+                  </div>
+                  <div class="total-pill">~ ${(v.totals.hfo / v.legs.length).toFixed(1)} MT</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderReportForm(v, leg, reportType) {
+      const title    = reportType === 'departure' ? 'Departure Report' : 'Arrival Report';
+      const port     = reportType === 'departure' ? leg.from : leg.to;
+      const date     = reportType === 'departure' ? leg.dep  : leg.arr;
+      const opTag    = reportType === 'departure' ? { cls:'ph-tag-port', text:'Port' } : { cls:'ph-tag-sea', text:'Sea' };
+      const opTitle  = reportType === 'departure' ? 'FWE → SBE (In Port)' : 'FA → SBE (Sea Passage)';
+      const sbyTitle = reportType === 'departure' ? 'SBE → FA (Stand By Departure)' : 'SBE → FWE (Stand By Arrival)';
+
+      return `
+        <nav class="text-[0.72rem] mb-3 flex items-center gap-1.5" style="color: var(--color-dim);">
+          <span class="cursor-pointer hover:underline" data-breadcrumb="voyage">${v.name}</span>
+          <span style="color: var(--color-faint);">›</span>
+          <span>${leg.from} → ${leg.to}</span>
+          <span style="color: var(--color-faint);">›</span>
+          <span style="color: var(--color-text); font-weight: 600;">${title}</span>
+        </nav>
+
+        <section class="glass-card rounded-2xl overflow-hidden mb-5">
+          <div class="report-head px-5 py-4 flex items-center gap-3">
+            <span class="ph-tag ${reportType==='departure'?'ph-tag-port':'ph-tag-sea'}">${reportType === 'departure' ? 'Departure' : 'Arrival'}</span>
+            <div class="text-[1.05rem] font-extrabold" style="color: var(--color-text);">${port}</div>
+            <div class="flex-1"></div>
+            <div class="text-[0.72rem] mono" style="color: var(--color-dim);">${date}</div>
+          </div>
+          <div class="p-5 grid grid-cols-4 gap-4">
+            <div><div class="form-label">Port</div><input class="form-input" value="${port}" /></div>
+            <div><div class="form-label">Date</div><input class="form-input mono" type="date" value="${date}" /></div>
+            <div><div class="form-label">SBE</div><input class="form-input mono" type="time" value="${reportType==='departure'?'08:30':'14:00'}" /></div>
+            <div><div class="form-label">${reportType==='departure' ? 'FA' : 'FWE'}</div><input class="form-input mono" type="time" value="${reportType==='departure'?'09:15':'14:45'}" /></div>
+          </div>
+        </section>
+
+        <div class="section-label mb-3">Phases</div>
+        ${renderPhase({ tag: opTag, title: opTitle, withRemarks: true })}
+
+        <div class="fuel-change-insert my-1">
+          <button type="button">+ Insert Fuel Changeover phase here</button>
+        </div>
+
+        ${renderPhase({ tag: { cls:'ph-tag-standby', text:'Standby' }, title: sbyTitle, withRemarks: false })}
+
+        <!-- ═══ Totals card (v6 layout) ═══ -->
+        <div class="section-label mt-5 mb-3">${reportType==='departure' ? 'Departure' : 'Arrival'} Summary</div>
+        ${renderReportTotals(reportType)}
+
+        <!-- ═══ ROB / Bunkered / FW / AEP cards (below phases) ═══ -->
+        <div class="grid ${reportType==='departure' ? 'grid-cols-2' : 'grid-cols-3'} gap-3 mt-4">
+          <div class="cat-card fuel">
+            <div class="cat-label">${reportType==='departure' ? 'Fuel R.O.B. (MT)' : 'R.O.B. (MT)'}</div>
+            <div class="cat-body grid grid-cols-1 gap-1.5">
+              <div class="flex items-center gap-3"><span class="form-label !mb-0 w-10">HFO</span><input  class="form-input mono !py-1.5" value="1240.0" /></div>
+              <div class="flex items-center gap-3"><span class="form-label !mb-0 w-10">MGO</span><input  class="form-input mono !py-1.5" value="185.4"  /></div>
+              <div class="flex items-center gap-3"><span class="form-label !mb-0 w-10">LSFO</span><input class="form-input mono !py-1.5" value="420.2"  /></div>
+            </div>
+          </div>
+          ${reportType==='departure' ? `
+            <div class="cat-card fuel">
+              <div class="cat-label">Fuel Bunkered (MT)</div>
+              <div class="cat-body grid grid-cols-1 gap-1.5">
+                <div class="flex items-center gap-3"><span class="form-label !mb-0 w-10">HFO</span><input  class="form-input mono !py-1.5" value="0" /></div>
+                <div class="flex items-center gap-3"><span class="form-label !mb-0 w-10">MGO</span><input  class="form-input mono !py-1.5" value="0" /></div>
+                <div class="flex items-center gap-3"><span class="form-label !mb-0 w-10">LSFO</span><input class="form-input mono !py-1.5" value="0" /></div>
+              </div>
+            </div>
+          ` : `
+            <div class="cat-card water">
+              <div class="cat-label">Fresh Water (MT)</div>
+              <div class="cat-body grid grid-cols-1 gap-1.5">
+                <div class="flex items-center gap-3"><span class="form-label !mb-0 w-14">R.O.B.</span><input   class="form-input mono !py-1.5" value="1120" /></div>
+                <div class="flex items-center gap-3"><span class="form-label !mb-0 w-14">Bunk.</span><input    class="form-input mono !py-1.5" value="0"    /></div>
+                <div class="flex items-center gap-3"><span class="form-label !mb-0 w-14">Prod.</span><input    class="form-input mono !py-1.5" value="320"  /></div>
+                <div class="flex items-center gap-3"><span class="form-label !mb-0 w-14">Cons.</span><input    class="form-input mono !py-1.5" value="286"  /></div>
+              </div>
+            </div>
+            <div class="cat-card chem">
+              <div class="cat-label">AEP / Alkali</div>
+              <div class="cat-body grid grid-cols-1 gap-1.5">
+                <div><div class="form-label">Open loop (hh:mm)</div><input   class="form-input mono !py-1.5" type="time" value="14:00" /></div>
+                <div><div class="form-label">Closed loop (hh:mm)</div><input class="form-input mono !py-1.5" type="time" value="42:30" /></div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div><div class="form-label">NaOH cons (L)</div><input class="form-input mono !py-1.5" value="14"  /></div>
+                  <div><div class="form-label">NaOH ROB (L)</div><input  class="form-input mono !py-1.5" value="310" /></div>
+                </div>
+              </div>
+            </div>
+          `}
+        </div>
+
+        <section class="glass-card rounded-2xl p-5 mt-5 grid grid-cols-[1fr_auto] gap-4 items-end">
+          <div>
+            <div class="form-label">Engineer on watch</div>
+            <input class="form-input" placeholder="First Engineer · name" value="C. Dimitriou" />
+          </div>
+          <div class="flex gap-2">
+            <button class="btn-flat">Cancel</button>
+            <button class="btn-primary">Save</button>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderReportTotals(reportType) {
+      const hfo  = '14.82';
+      const mgo  = '3.41';
+      const lsfo = '0.00';
+      const total = (parseFloat(hfo) + parseFloat(mgo) + parseFloat(lsfo)).toFixed(2);
+      const icon = reportType === 'departure' ? '⛴' : '⚓';
+      const label = reportType === 'departure' ? 'Departure Totals (MT)' : 'Arrival Totals (MT)';
+      return `
+        <div class="cat-card fuel">
+          <div class="cat-label">${icon} ${label}</div>
+          <div class="cat-body">
+            <div class="grid grid-cols-4 gap-4">
+              <div class="fuel-col hfo">
+                <div class="fc-type"><span class="fc-dot"></span>HFO</div>
+                <div class="fc-big">${hfo}</div>
+              </div>
+              <div class="fuel-col mgo">
+                <div class="fc-type"><span class="fc-dot"></span>MGO</div>
+                <div class="fc-big">${mgo}</div>
+              </div>
+              <div class="fuel-col lsfo">
+                <div class="fc-type"><span class="fc-dot"></span>LSFO</div>
+                <div class="fc-big">${lsfo}</div>
+              </div>
+              <div class="fuel-col" style="color: var(--color-text);">
+                <div class="fc-type" style="color: var(--color-dim);">Σ Total</div>
+                <div class="fc-big" style="color: var(--color-text);">${total}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderPhase({ tag, title, withRemarks }) {
+      return `
+        <section class="glass-card rounded-2xl overflow-hidden mb-4">
+          <div class="phase-port px-5 py-3 flex items-center gap-3">
+            <span class="ph-tag ${tag.cls}">${tag.text}</span>
+            <input class="phase-title-input" value="${title}" />
+            <button class="btn-flat !py-1 !px-2 !text-[0.7rem]" title="Remove phase" aria-label="Remove phase">✕</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-[0.82rem]">
+              <thead>
+                <tr class="text-left" style="color: var(--color-faint);">
+                  <th class="px-5 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">Equipment</th>
+                  <th class="px-3 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">Fuel</th>
+                  <th class="px-3 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">Start (m³)</th>
+                  <th class="px-3 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">End (m³)</th>
+                  <th class="px-3 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">Δm³</th>
+                  <th class="px-5 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase text-right">Consumption (MT)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${EQUIPMENT.map((eq, i) => {
+                  const fuel    = eq.fuel;
+                  const start   = 1200 + (i*37 % 40) * 3;
+                  const end     = start + 2 + ((i*7) % 6);
+                  const delta   = end - start;
+                  const density = fuel === 'hfo' ? 0.92 : fuel === 'mgo' ? 0.83 : 0.92;
+                  const mt      = (delta * density).toFixed(2);
+                  return `
+                    <tr class="table-row fuel-row-${fuel}">
+                      <td class="px-5 py-2.5">
+                        <div class="flex items-center">
+                          <span class="flag-band ${fuel}"></span>
+                          <span class="font-semibold" style="color: var(--color-text);">${eq.label}</span>
+                        </div>
+                      </td>
+                      <td class="px-3 py-2.5">
+                        ${eq.locked
+                          ? `<span class="fuel-badge ${fuel}" title="Locked fuel — ${fuel.toUpperCase()} only">${fuel.toUpperCase()} <span class="lock-ico">🔒</span></span>`
+                          : `<select class="fuel-select ${fuel}" title="Allowed fuels: ${eq.allowed.map(f=>f.toUpperCase()).join(' · ')}" data-fuel-select>
+                               ${eq.allowed.map(f => `<option value="${f}" ${f===fuel?'selected':''}>${f.toUpperCase()}</option>`).join('')}
+                             </select>`}
+                      </td>
+                      <td class="px-3 py-2.5"><input class="form-input mono !py-1 !px-2 !text-[0.78rem]" value="${start}" /></td>
+                      <td class="px-3 py-2.5"><input class="form-input mono !py-1 !px-2 !text-[0.78rem]" value="${end}"   /></td>
+                      <td class="px-3 py-2.5 mono" style="color: var(--color-dim);">${delta}</td>
+                      <td class="px-5 py-2.5 text-right"><span class="eq-mt mono font-bold text-[0.95rem]">${mt}</span></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="ptotals">
+            <div class="pt-block">
+              <div class="pt-head">HFO</div>
+              <div class="pt-line"><span class="pt-label"><span class="pt-dot" style="background: var(--color-hfo-band);"></span>Total</span><span class="pt-val" style="color: var(--color-hfo);">8.28 MT</span></div>
+            </div>
+            <div class="pt-block">
+              <div class="pt-head">MGO</div>
+              <div class="pt-line"><span class="pt-label"><span class="pt-dot" style="background: var(--color-mgo-band);"></span>Total</span><span class="pt-val" style="color: var(--color-mgo);">2.74 MT</span></div>
+            </div>
+            <div class="pt-block">
+              <div class="pt-head">LSFO</div>
+              <div class="pt-line"><span class="pt-label"><span class="pt-dot" style="background: var(--color-lsfo-band);"></span>Total</span><span class="pt-noval">—</span></div>
+            </div>
+          </div>
+          ${withRemarks ? `
+            <div class="phase-remarks">
+              <input class="w-full bg-transparent border-0 outline-none italic text-[0.78rem]" placeholder="Remarks (optional)…" />
+            </div>
+          ` : ''}
+        </section>
+      `;
+    }
+
+    function renderVoyageReport(v, leg) {
+      return `
+        <nav class="text-[0.72rem] mb-3 flex items-center gap-1.5" style="color: var(--color-dim);">
+          <span class="cursor-pointer hover:underline" data-breadcrumb="voyage">${v.name}</span>
+          <span style="color: var(--color-faint);">›</span>
+          <span>${leg.from} → ${leg.to}</span>
+          <span style="color: var(--color-faint);">›</span>
+          <span style="color: var(--color-text); font-weight: 600;">Voyage Report</span>
+        </nav>
+        <section class="cat-card nav mb-5">
+          <div class="cat-label">Voyage Report (Bridge / Navigation)</div>
+          <div class="cat-body">
+            <div class="vr-grid">
+              <div class="vr-col">
+                <div class="vr-col-head">Departure · ${leg.from}</div>
+                <div class="vr-field">
+                  <div><div class="form-label">SBE</div><input class="form-input mono" type="time" value="08:30" /></div>
+                  <div><div class="form-label">FA</div><input  class="form-input mono" type="time" value="09:15" /></div>
+                </div>
+                <div class="vr-sub-head">Pier → FA</div>
+                <div class="vr-field">
+                  <div><div class="form-label">Distance (nm)</div><input class="form-input mono" value="4.2" /></div>
+                  <div><div class="form-label">Time (h)</div><input      class="form-input mono" value="0.75" /></div>
+                </div>
+                <div class="vr-calc">Avg speed · 5.6 kn</div>
+              </div>
+              <div class="vr-col">
+                <div class="vr-col-head">Sea Passage</div>
+                <div class="vr-field-full mb-2"><div class="form-label">Total miles</div><input class="form-input mono" value="1120" /></div>
+                <div class="vr-field-full mb-2"><div class="form-label">Steaming time (h)</div><input class="form-input mono" value="56.0" /></div>
+                <div class="vr-calc">Avg speed · 20.0 kn</div>
+              </div>
+              <div class="vr-col">
+                <div class="vr-col-head">Arrival · ${leg.to}</div>
+                <div class="vr-field">
+                  <div><div class="form-label">SBE</div><input class="form-input mono" type="time" value="14:00" /></div>
+                  <div><div class="form-label">FWE</div><input class="form-input mono" type="time" value="14:45" /></div>
+                </div>
+                <div class="vr-sub-head">SBE → Berth</div>
+                <div class="vr-field">
+                  <div><div class="form-label">Distance (nm)</div><input class="form-input mono" value="3.8" /></div>
+                  <div><div class="form-label">Time (h)</div><input      class="form-input mono" value="0.75" /></div>
+                </div>
+                <div class="vr-calc">Avg speed · 5.1 kn</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    // ─────────────────────────────────────────────
+    // Overlays
+    // ─────────────────────────────────────────────
+    function renderEnableEditModal() {
+      const ship = SHIPS.find(s => s.id === state.shipId);
+      return `
+        <div class="modal-overlay" data-close-modal>
+          <div class="modal-content" data-stop style="max-width: 420px;">
+            <div class="modal-head flex items-center">
+              <h2>✎ Enable Edit Mode</h2>
+              <div class="flex-1"></div>
+              <button class="btn-flat !p-2 !rounded-lg" data-close-modal>✕</button>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-[0.78rem]" style="color: var(--color-dim);">
+                Enter the <strong style="color: var(--color-text);">${ship.displayName}</strong> PIN. Edit mode auto-exits after 30 min of inactivity.
+              </p>
+
+              <div>
+                <label class="form-label">Editing as</label>
+                <select id="edit-as" class="form-input">
+                  <option value="chief">Chief Engineer</option>
+                  <option value="second">2nd Engineer (ECR)</option>
+                  <option value="bridge">Bridge Officer on Watch</option>
+                  <option value="other">Other (record in commit)</option>
+                </select>
+                <div class="text-[0.68rem] mt-1" style="color: var(--color-faint);">Recorded in the GitHub commit message — used for the audit trail.</div>
+              </div>
+
+              <div>
+                <label class="form-label">Ship PIN</label>
+                <div class="flex gap-2 justify-center mt-1">
+                  ${[0,1,2,3].map(i => `<input class="form-input mono text-center !text-[1.4rem] !font-extrabold" maxlength="1" inputmode="numeric" style="width: 3.2rem; height: 3.2rem; ${state.pinError ? 'border-color: var(--color-fuel-band);' : ''}" placeholder="•" data-pin="${i}" />`).join('')}
+                </div>
+                ${state.pinError ? `
+                  <div class="mt-2 rounded-md px-3 py-2 text-[0.72rem]" style="background: var(--color-error-bg); border: 1px solid var(--color-error-border); color: var(--color-error-fg);">
+                    <strong>${state.pinError.msg}</strong>
+                  </div>
+                ` : `
+                  <div class="text-[0.68rem] mt-2 text-center" style="color: var(--color-faint);">4-digit PIN — same for all power users on this ship.</div>
+                `}
+              </div>
+
+              <div class="rounded-lg px-3 py-2 flex items-start gap-2" style="background: var(--color-surface2);">
+                <span class="text-[0.85rem]">💡</span>
+                <p class="text-[0.7rem] leading-snug" style="color: var(--color-dim);">
+                  This PIN exists to prevent <em>accidental</em> edits — not to authenticate you. Your Windows session already did that.
+                </p>
+              </div>
+            </div>
+            <div class="p-5 flex gap-2 justify-end border-t" style="border-color: var(--color-border-subtle);">
+              <button class="btn-flat" data-close-modal>Cancel</button>
+              <button id="btn-confirm-edit" class="btn-primary">Enable Edit Mode</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderRotatePinModal() {
+      const r = state.rotate || { shipId: state.shipId, step: 'enter' };
+      const ship = SHIPS.find(s => s.id === r.shipId) || SHIPS[0];
+
+      if (r.step === 'success') {
+        return `
+          <div class="modal-overlay" data-close-modal>
+            <div class="modal-content" data-stop style="max-width: 460px;">
+              <div class="modal-head flex items-center" style="background: rgba(16,185,129,0.1);">
+                <h2>✓ PIN rotated</h2>
+                <div class="flex-1"></div>
+                <button class="btn-flat !p-2 !rounded-lg" data-close-modal>✕</button>
+              </div>
+              <div class="p-5 space-y-4">
+                <p class="text-[0.8rem]" style="color: var(--color-text);">
+                  New PIN for <strong>${ship.displayName}</strong>:
+                </p>
+                <div class="rounded-xl py-5 px-4 text-center" style="background: var(--color-warn-bg); border: 1px solid var(--color-warn-border);">
+                  <div class="mono font-extrabold tracking-[0.5rem]" style="font-size: 2.4rem; color: var(--color-warn-fg);">${r.newPin}</div>
+                </div>
+                <div class="flex gap-2">
+                  <button id="btn-copy-pin" class="btn-flat flex-1 !text-[0.78rem]">📋 Copy to clipboard</button>
+                </div>
+                <div class="rounded-lg px-3 py-2.5 flex items-start gap-2" style="background: var(--color-error-bg); border: 1px solid var(--color-error-border);">
+                  <span class="text-[0.85rem]">⚠</span>
+                  <p class="text-[0.72rem] leading-snug" style="color: var(--color-error-fg);">
+                    <strong>Shown only once.</strong> Distribute it to the crew via your normal channel (Signal, in person). The old PIN stops working immediately for new edit-mode sessions.
+                  </p>
+                </div>
+                <div class="text-[0.68rem] mono" style="color: var(--color-faint);">
+                  commit · rotate-pin: ${ship.id} · admin · 2026-04-18
+                </div>
+              </div>
+              <div class="p-5 flex gap-2 justify-end border-t" style="border-color: var(--color-border-subtle);">
+                <button class="btn-primary" data-close-modal>Done</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // step === 'enter'
+      return `
+        <div class="modal-overlay" data-close-modal>
+          <div class="modal-content" data-stop style="max-width: 460px;">
+            <div class="modal-head flex items-center">
+              <h2>Rotate PIN — ${ship.displayName}</h2>
+              <div class="flex-1"></div>
+              <button class="btn-flat !p-2 !rounded-lg" data-close-modal>✕</button>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-[0.78rem]" style="color: var(--color-dim);">
+                Set a new 4-digit PIN. Old PIN stops working immediately for new edit-mode sessions; current sessions are unaffected.
+              </p>
+
+              <div>
+                <label class="form-label">New PIN</label>
+                <div class="flex gap-2 justify-center mt-1">
+                  ${[0,1,2,3].map(i => `<input class="form-input mono text-center !text-[1.4rem] !font-extrabold" maxlength="1" inputmode="numeric" style="width: 3rem; height: 3rem; ${r.error ? 'border-color: var(--color-error-border);' : ''}" placeholder="•" data-pin-new="${i}" />`).join('')}
+                </div>
+              </div>
+
+              <div>
+                <label class="form-label">Confirm new PIN</label>
+                <div class="flex gap-2 justify-center mt-1">
+                  ${[0,1,2,3].map(i => `<input class="form-input mono text-center !text-[1.4rem] !font-extrabold" maxlength="1" inputmode="numeric" style="width: 3rem; height: 3rem; ${r.error ? 'border-color: var(--color-error-border);' : ''}" placeholder="•" data-pin-confirm="${i}" />`).join('')}
+                </div>
+              </div>
+
+              ${r.error ? `
+                <div class="rounded-md px-3 py-2 text-[0.72rem]" style="background: var(--color-error-bg); border: 1px solid var(--color-error-border); color: var(--color-error-fg);">
+                  <strong>${r.error}</strong>
+                </div>
+              ` : ''}
+
+              <button id="btn-generate-pin" class="btn-flat w-full !text-[0.78rem]">🎲 Generate random PIN</button>
+            </div>
+            <div class="p-5 flex gap-2 justify-end border-t" style="border-color: var(--color-border-subtle);">
+              <button class="btn-flat" data-close-modal>Cancel</button>
+              <button id="btn-confirm-rotate" class="btn-primary">Rotate PIN</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAdminModal() {
+      return `
+        <div class="modal-overlay" data-close-modal>
+          <div class="modal-content" data-stop>
+            <div class="modal-head flex items-center">
+              <h2>Admin Panel</h2>
+              <div class="flex-1"></div>
+              <button class="btn-flat !p-2 !rounded-lg" data-close-modal>✕</button>
+            </div>
+            <div class="p-5">
+              <p class="text-[0.78rem] mb-4" style="color: var(--color-dim);">
+                One row per ship. Rotate the PIN if it leaks or after a crew change. Rotate the GitHub token before it expires or if compromised.
+              </p>
+              <div class="glass-card rounded-xl overflow-hidden">
+                <table class="w-full text-[0.82rem]">
+                  <thead>
+                    <tr style="background: var(--color-surface2); color: var(--color-faint);">
+                      <th class="text-left  px-4 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">Ship</th>
+                      <th class="text-left  px-4 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">PIN</th>
+                      <th class="text-left  px-4 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">Token</th>
+                      <th class="text-left  px-4 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">Last edit</th>
+                      <th class="text-right px-4 py-2 font-bold text-[0.55rem] tracking-[1.2px] uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${SHIPS.map((s,i) => `
+                      <tr class="border-t" style="border-color: var(--color-border-subtle);">
+                        <td class="px-4 py-3 font-semibold" style="color: var(--color-text);">${s.displayName}</td>
+                        <td class="px-4 py-3"><span class="badge mono" style="background: var(--color-surface2); color: var(--color-dim); font-size: 0.65rem;">●●●●</span></td>
+                        <td class="px-4 py-3"><span class="badge" style="background: rgba(16,185,129,0.1); color: var(--color-mgo); font-size: 0.65rem;">● valid · 78 d left</span></td>
+                        <td class="px-4 py-3 mono text-[0.72rem]" style="color: var(--color-dim);">2026-04-${String(12+i).padStart(2,'0')} · Chief</td>
+                        <td class="px-4 py-3 text-right space-x-1 whitespace-nowrap">
+                          <button class="btn-flat !py-1 !px-2 !text-[0.7rem]" data-rotate-pin="${s.id}">Rotate PIN</button>
+                          <button class="btn-flat !py-1 !px-2 !text-[0.7rem]">Rotate token</button>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+              <div class="section-divider"></div>
+              <div class="section-label mb-2">Recent commits · data repo</div>
+              <div class="glass-card rounded-xl p-3 mono text-[0.72rem] leading-relaxed" style="color: var(--color-dim);">
+                <div>2026-04-17 10:02 · [solstice] save 2026-03-12_Singapore_to_Hong_Kong.json · editor=Chief</div>
+                <div>2026-04-17 09:47 · [equinox] save 2026-02-18_Shanghai_to_Yokohama.json · editor=2nd</div>
+                <div>2026-04-16 21:15 · [solstice] save 2026-03-12_Singapore_to_Hong_Kong.json · editor=Chief</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderNewVoyageModal() {
+      return `
+        <div class="modal-overlay" data-close-modal>
+          <div class="modal-content" data-stop>
+            <div class="modal-head flex items-center">
+              <h2>New Voyage</h2>
+              <div class="flex-1"></div>
+              <button class="btn-flat !p-2 !rounded-lg" data-close-modal>✕</button>
+            </div>
+            <div class="p-5 grid grid-cols-2 gap-4">
+              <div class="col-span-2"><div class="form-label">Voyage name</div><input class="form-input" placeholder="e.g. Yokohama → Vancouver" /></div>
+              <div><div class="form-label">Start date</div><input class="form-input mono" type="date" /></div>
+              <div><div class="form-label">End date</div><input class="form-input mono" type="date" /></div>
+              <div class="col-span-2 glass-card rounded-xl p-3 flex gap-3 items-start" style="background: var(--color-surface2);">
+                <input type="checkbox" class="mt-1" checked />
+                <div>
+                  <div class="text-[0.82rem] font-semibold" style="color: var(--color-text);">Import final counter values from last voyage</div>
+                  <div class="text-[0.72rem] mono mt-0.5" style="color: var(--color-dim);">Singapore → Hong Kong · 5 equipment counters</div>
+                </div>
+              </div>
+            </div>
+            <div class="p-5 flex gap-2 justify-end border-t" style="border-color: var(--color-border-subtle);">
+              <button class="btn-flat"    data-close-modal>Cancel</button>
+              <button class="btn-primary" data-close-modal>Create voyage</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAddLegModal() {
+      const v = VOYAGES.find(x => x.id === state.selected.voyageId) || VOYAGES[0];
+      const lastLeg = v.legs[v.legs.length - 1];
+      const suggestedFrom = lastLeg ? lastLeg.to : '';
+      return `
+        <div class="modal-overlay" data-close-modal>
+          <div class="modal-content" data-stop>
+            <div class="modal-head flex items-center">
+              <h2>+ Add Leg — ${v.name}</h2>
+              <div class="flex-1"></div>
+              <button class="btn-flat !p-2 !rounded-lg" data-close-modal>✕</button>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-[0.78rem]" style="color: var(--color-dim);">
+                Append a new leg to this voyage. Counter values will carry over from the previous leg's arrival.
+              </p>
+              <div class="grid grid-cols-2 gap-4">
+                <div><div class="form-label">From port</div><input class="form-input" placeholder="e.g. Hong Kong" value="${suggestedFrom}" /></div>
+                <div><div class="form-label">To port</div><input class="form-input" placeholder="e.g. Shanghai" /></div>
+                <div><div class="form-label">Departure date</div><input class="form-input mono" type="date" /></div>
+                <div><div class="form-label">Arrival date</div><input class="form-input mono" type="date" /></div>
+              </div>
+              ${lastLeg ? `
+                <div class="glass-card rounded-xl p-3 flex gap-3 items-start" style="background: var(--color-surface2);">
+                  <input type="checkbox" class="mt-1" checked />
+                  <div>
+                    <div class="text-[0.82rem] font-semibold" style="color: var(--color-text);">Carry over arrival counters from previous leg</div>
+                    <div class="text-[0.72rem] mono mt-0.5" style="color: var(--color-dim);">${lastLeg.from} → ${lastLeg.to} · 5 equipment counters</div>
+                  </div>
+                </div>` : ''}
+            </div>
+            <div class="p-5 flex gap-2 justify-end border-t" style="border-color: var(--color-border-subtle);">
+              <button class="btn-flat"    data-close-modal>Cancel</button>
+              <button class="btn-primary" data-close-modal>Add leg</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderEndVoyageModal() {
+      const v = VOYAGES.find(x => x.id === state.selected.voyageId) || VOYAGES[0];
+      const totalFuel = (v.totals.hfo + v.totals.mgo + v.totals.lsfo).toFixed(2);
+      return `
+        <div class="modal-overlay" data-close-modal>
+          <div class="modal-content" data-stop style="max-width: 760px;">
+            <div class="modal-head flex items-center">
+              <h2>⚑ End Voyage — ${v.name}</h2>
+              <div class="flex-1"></div>
+              <button class="btn-flat !p-2 !rounded-lg" data-close-modal>✕</button>
+            </div>
+            <div class="p-5 space-y-5">
+              <p class="text-[0.78rem]" style="color: var(--color-dim);">
+                Finalize this voyage. Totals below are aggregated from every leg. Lub-oil consumption is recorded here once per voyage.
+              </p>
+
+              <!-- Aggregated totals -->
+              <div class="cat-card fuel">
+                <div class="cat-label">⛴ Cruise Totals (MT)</div>
+                <div class="cat-body">
+                  <div class="grid grid-cols-4 gap-4">
+                    <div class="fuel-col hfo"><div class="fc-type"><span class="fc-dot"></span>HFO</div><div class="fc-big">${v.totals.hfo.toFixed(2)}</div></div>
+                    <div class="fuel-col mgo"><div class="fc-type"><span class="fc-dot"></span>MGO</div><div class="fc-big">${v.totals.mgo.toFixed(2)}</div></div>
+                    <div class="fuel-col lsfo"><div class="fc-type"><span class="fc-dot"></span>LSFO</div><div class="fc-big">${v.totals.lsfo.toFixed(2)}</div></div>
+                    <div class="fuel-col"><div class="fc-type" style="color: var(--color-dim);">Σ Total</div><div class="fc-big" style="color: var(--color-text);">${totalFuel}</div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Supporting aggregates -->
+              <div class="grid grid-cols-2 gap-3">
+                <div class="cat-card water">
+                  <div class="cat-label">Fresh Water</div>
+                  <div class="cat-body water-rows">
+                    <div class="water-row"><span class="wr-label">Produced</span><span class="wr-val">320</span></div>
+                    <div class="water-row"><span class="wr-label">Consumed</span><span class="wr-val">286</span></div>
+                    <div class="water-row"><span class="wr-label">Bunkered</span><span class="wr-val">0</span></div>
+                  </div>
+                </div>
+                <div class="cat-card chem">
+                  <div class="cat-label">AEP · NaOH</div>
+                  <div class="cat-body chem-rows">
+                    <div class="chem-row"><span class="cr-label">Open-loop h</span><span class="cr-val">28.0</span></div>
+                    <div class="chem-row"><span class="cr-label">Closed-loop h</span><span class="cr-val">85.0</span></div>
+                    <div class="chem-row"><span class="cr-label">NaOH consumed</span><span class="cr-val">42 L</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Lub-Oil (ONLY entered here) -->
+              <div class="cat-card lube">
+                <div class="cat-label">Lub-Oil · recorded at voyage end</div>
+                <div class="cat-body grid grid-cols-3 gap-3">
+                  <div><div class="form-label">ME consumption</div><input class="form-input mono" placeholder="0" /></div>
+                  <div><div class="form-label">13S / 14S</div><input class="form-input mono" placeholder="0" /></div>
+                  <div><div class="form-label">Used LO13C</div><input class="form-input mono" placeholder="0" /></div>
+                </div>
+              </div>
+
+              <!-- Signature + notes -->
+              <div class="glass-card rounded-xl p-4 grid grid-cols-2 gap-4">
+                <div>
+                  <div class="form-label">Chief engineer</div>
+                  <input class="form-input" placeholder="Name · signature" />
+                </div>
+                <div>
+                  <div class="form-label">Ended on</div>
+                  <input class="form-input mono" type="date" value="${v.endDate}" />
+                </div>
+                <div class="col-span-2">
+                  <div class="form-label">Notes</div>
+                  <textarea class="form-input" rows="3" placeholder="Any remarks for this voyage…"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="p-5 flex gap-2 justify-end border-t" style="border-color: var(--color-border-subtle);">
+              <button class="btn-flat"    data-close-modal>Cancel</button>
+              <button class="btn-success" data-close-modal>⚑ End voyage</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderConflictModal() {
+      return `
+        <div class="modal-overlay" data-close-modal>
+          <div class="modal-content" data-stop>
+            <div class="modal-head flex items-center" style="background: rgba(245,158,11,0.1);">
+              <h2 style="color: var(--color-hfo);">⚠ Conflict detected</h2>
+            </div>
+            <div class="p-5">
+              <p class="text-[0.85rem] mb-3" style="color: var(--color-text);">Another session saved this voyage on GitHub after you started editing.</p>
+              <div class="glass-card rounded-xl p-3 mono text-[0.72rem] mb-4" style="color: var(--color-dim);">
+                <div>Remote SHA:    <span style="color: var(--color-text);">9a3c…f27</span></div>
+                <div>Your base SHA: <span style="color: var(--color-text);">8b2a…991</span></div>
+                <div>Last modified (remote): 2026-04-17 10:02 · chief@equinox</div>
+              </div>
+              <div class="space-y-2 text-[0.82rem]">
+                <div class="flex items-center gap-2"><span class="badge" style="background: rgba(6,182,212,0.1); color: var(--color-ocean-600);">Reload remote</span><span style="color: var(--color-dim);">Discard your in-memory edits, load the newer file.</span></div>
+                <div class="flex items-center gap-2"><span class="badge" style="background: rgba(245,158,11,0.1); color: var(--color-hfo);">Force overwrite</span><span style="color: var(--color-dim);">Save your version — the remote change will be replaced.</span></div>
+                <div class="flex items-center gap-2"><span class="badge" style="background: rgba(107,123,143,0.1); color: var(--color-dim);">Cancel</span><span style="color: var(--color-dim);">Keep editing; save nothing yet.</span></div>
+              </div>
+            </div>
+            <div class="p-5 flex gap-2 justify-end border-t" style="border-color: var(--color-border-subtle);">
+              <button class="btn-flat"    data-close-modal>Cancel</button>
+              <button class="btn-warning" data-close-modal>Force overwrite</button>
+              <button class="btn-primary" data-close-modal>Reload remote</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ─────────────────────────────────────────────
+    // Events
+    // ─────────────────────────────────────────────
+    function wirePinBoxes($, $$, opts = {}) {
+      const selector = opts.selector || '[data-pin]';
+      const pinBoxes = $$(selector);
+      if (!pinBoxes.length) return;
+      const submitBtn = () => opts.submitBtn ? $(opts.submitBtn) : ($('#btn-confirm-edit') || $('#btn-open'));
+      if (opts.autofocus !== false) pinBoxes[0].focus();
+      pinBoxes.forEach((box, i) => {
+        box.addEventListener('input', e => {
+          const digit = e.target.value.replace(/\D/g, '').slice(0, 1);
+          e.target.value = digit;
+          if (digit && i < pinBoxes.length - 1) pinBoxes[i + 1].focus();
+          if (digit && i === pinBoxes.length - 1 && pinBoxes.every(b => b.value)) {
+            submitBtn()?.focus();
+          }
+        });
+        box.addEventListener('keydown', e => {
+          if (e.key === 'Backspace' && !box.value && i > 0) {
+            pinBoxes[i - 1].focus();
+            pinBoxes[i - 1].value = '';
+            e.preventDefault();
+          } else if (e.key === 'ArrowLeft' && i > 0) {
+            pinBoxes[i - 1].focus(); e.preventDefault();
+          } else if (e.key === 'ArrowRight' && i < pinBoxes.length - 1) {
+            pinBoxes[i + 1].focus(); e.preventDefault();
+          } else if (e.key === 'Enter' && pinBoxes.every(b => b.value)) {
+            submitBtn()?.click();
+          }
+        });
+        box.addEventListener('paste', e => {
+          const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+          if (!text) return;
+          e.preventDefault();
+          text.split('').slice(0, pinBoxes.length - i).forEach((d, k) => {
+            pinBoxes[i + k].value = d;
+          });
+          const next = Math.min(i + text.length, pinBoxes.length - 1);
+          pinBoxes[next].focus();
+        });
+      });
+    }
+
+    function bind() {
+      const $ = (sel, el=document) => el.querySelector(sel);
+      const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+
+      if (state.view === 'landing') {
+        $('#ship-select')?.addEventListener('change', e => { state.shipId = e.target.value; state.pinError = null; render(); });
+        $('#btn-open')?.addEventListener('click', () => {
+          const pin = $$('[data-pin]').map(b => b.value).join('');
+          const ship = SHIPS.find(s => s.id === state.shipId);
+          // Empty PIN → view-only
+          if (pin.length === 0) {
+            state.pinError = null;
+            state.view = 'main';
+            state.editMode = false;
+            state.editor = null;
+            render();
+            return;
+          }
+          // Partial PIN → reject
+          if (pin.length < 4) {
+            state.pinError = { msg: 'PIN must be 4 digits — or leave blank to open in View Only.' };
+            render();
+            return;
+          }
+          // Wrong PIN for this ship?
+          if (pin !== ship.pin) {
+            state.pinError = { msg: `Incorrect PIN for ${ship.displayName}.` };
+            render();
+            return;
+          }
+          // Match → open in edit mode
+          state.pinError = null;
+          state.view = 'main';
+          state.editMode = true;
+          state.editor = $('#edit-as-landing')?.value || 'chief';
+          state.editMinutesLeft = 30;
+          render();
+        });
+        $('#btn-admin-login')?.addEventListener('click', e => { e.preventDefault(); state.view = 'main'; state.modal = 'admin'; render(); });
+        wirePinBoxes($, $$, { autofocus: false });
+        return;
+      }
+
+      $('#btn-toggle-sidebar')?.addEventListener('click', () => { state.sidebarOpen = !state.sidebarOpen; render(); });
+      $('#btn-dark')?.addEventListener('click',   () => { state.dark = !state.dark; render(); });
+      $('#btn-admin')?.addEventListener('click',  () => { state.modal = 'admin'; render(); });
+      $('#btn-new-voyage')?.addEventListener('click', () => { state.modal = 'newVoyage'; render(); });
+      $('#btn-logout')?.addEventListener('click', () => { state.view = 'landing'; state.modal = null; state.editMode = false; state.editor = null; render(); });
+
+      $('#btn-enable-edit')?.addEventListener('click', () => { state.modal = 'enableEdit'; render(); });
+      $('#btn-exit-edit')?.addEventListener('click',   () => { state.editMode = false; state.editor = null; render(); });
+      $('#btn-confirm-edit')?.addEventListener('click', () => {
+        const pin = $$('[data-pin]').map(b => b.value).join('');
+        const ship = SHIPS.find(s => s.id === state.shipId);
+        if (pin.length < 4) {
+          state.pinError = { msg: 'Enter the 4-digit PIN.' };
+          render(); return;
+        }
+        if (pin !== ship.pin) {
+          state.pinError = { msg: `Wrong PIN for ${ship.displayName}.` };
+          render(); return;
+        }
+        state.pinError = null;
+        state.editMode = true;
+        state.editor = $('#edit-as')?.value || 'chief';
+        state.editMinutesLeft = 30;
+        state.modal = null;
+        render();
+      });
+
+      // Default PIN wiring (Enable Edit modal — single [data-pin] group)
+      wirePinBoxes($, $$);
+
+      // ── Rotate PIN modal ──
+      $$('[data-rotate-pin]').forEach(btn => btn.addEventListener('click', () => {
+        state.modal = 'rotatePin';
+        state.rotate = { shipId: btn.dataset.rotatePin, step: 'enter' };
+        render();
+      }));
+
+      if (state.modal === 'rotatePin' && state.rotate?.step === 'enter') {
+        wirePinBoxes($, $$, { selector: '[data-pin-new]', submitBtn: '#btn-confirm-rotate' });
+        // Confirm group: don't autofocus (would steal focus from new group)
+        wirePinBoxes($, $$, { selector: '[data-pin-confirm]', submitBtn: '#btn-confirm-rotate', autofocus: false });
+
+        $('#btn-generate-pin')?.addEventListener('click', () => {
+          const pin = String(Math.floor(1000 + Math.random() * 9000));
+          $$('[data-pin-new]').forEach((b, i) => b.value = pin[i]);
+          $$('[data-pin-confirm]').forEach((b, i) => b.value = pin[i]);
+          $('#btn-confirm-rotate')?.focus();
+        });
+
+        $('#btn-confirm-rotate')?.addEventListener('click', () => {
+          const newPin     = $$('[data-pin-new]').map(b => b.value).join('');
+          const confirmPin = $$('[data-pin-confirm]').map(b => b.value).join('');
+          const ship = SHIPS.find(s => s.id === state.rotate.shipId);
+          if (newPin.length < 4)            { state.rotate.error = 'New PIN must be 4 digits.';        render(); return; }
+          if (confirmPin.length < 4)        { state.rotate.error = 'Re-type the PIN to confirm.';      render(); return; }
+          if (newPin !== confirmPin)        { state.rotate.error = "PINs don't match. Try again.";     render(); return; }
+          if (newPin === ship.pin)          { state.rotate.error = 'New PIN must differ from the current one.'; render(); return; }
+          // Persist (mockup: just mutate SHIPS in memory — production: PBKDF2 hash + commit auth.json)
+          ship.pin = newPin;
+          state.rotate = { shipId: ship.id, step: 'success', newPin };
+          render();
+        });
+      }
+
+      if (state.modal === 'rotatePin' && state.rotate?.step === 'success') {
+        $('#btn-copy-pin')?.addEventListener('click', () => {
+          navigator.clipboard?.writeText(state.rotate.newPin);
+          const b = $('#btn-copy-pin');
+          if (b) { const orig = b.textContent; b.textContent = '✓ Copied'; setTimeout(() => b.textContent = orig, 1500); }
+        });
+      }
+
+      $$('[data-close-modal]').forEach(el => el.addEventListener('click', e => {
+        if (e.currentTarget !== e.target && e.target.closest('[data-stop]') && !e.target.hasAttribute('data-close-modal')) return;
+        state.modal = null;
+        state.pinError = null;
+        state.rotate = null;
+        if (location.hash === '#conflict') history.replaceState(null,'',location.pathname + location.search);
+        render();
+      }));
+      $$('[data-stop]').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+
+      $$('[data-filter]').forEach(b => b.addEventListener('click', () => { state.filter = b.dataset.filter; render(); }));
+      $('#btn-expand-all')?.addEventListener('click', () => {
+        VOYAGES.forEach(v => { state.expanded.add(v.id); v.legs.forEach(l => state.expanded.add(l.id)); });
+        render();
+      });
+      $('#btn-collapse-all')?.addEventListener('click', () => { state.expanded.clear(); render(); });
+
+      $$('[data-action="toggle-voyage"]').forEach(el => el.addEventListener('click', e => {
+        e.stopPropagation();
+        const id = el.dataset.voyage;
+        state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
+        render();
+      }));
+      $$('[data-action="select-voyage"]').forEach(el => el.addEventListener('click', () => {
+        const id = el.dataset.voyage;
+        state.selected = { voyageId: id, detailNode: 'voyageDetail', legId: null, reportType: null };
+        state.expanded.add(id);
+        render();
+      }));
+      $$('[data-action="select-detail"]').forEach(el => el.addEventListener('click', () => {
+        state.selected = { voyageId: el.dataset.voyage, detailNode: 'voyageDetail', legId: null, reportType: null };
+        render();
+      }));
+      $$('[data-action="toggle-leg"]').forEach(el => el.addEventListener('click', () => {
+        const legId = el.dataset.leg;
+        state.expanded.has(legId) ? state.expanded.delete(legId) : state.expanded.add(legId);
+        render();
+      }));
+      $$('[data-action="select-report"]').forEach(el => el.addEventListener('click', () => {
+        state.selected = { voyageId: el.dataset.voyage, detailNode: null, legId: el.dataset.leg, reportType: el.dataset.report };
+        render();
+      }));
+
+      $$('[data-breadcrumb="voyage"]').forEach(el => el.addEventListener('click', () => {
+        state.selected = { voyageId: state.selected.voyageId, detailNode: 'voyageDetail', legId: null, reportType: null };
+        render();
+      }));
+
+      $$('[data-leg-jump]').forEach(el => el.addEventListener('click', () => {
+        const legId = el.dataset.legJump;
+        state.expanded.add(state.selected.voyageId);
+        state.expanded.add(legId);
+        state.selected = { voyageId: state.selected.voyageId, detailNode: null, legId, reportType: 'departure' };
+        render();
+      }));
+
+      $$('[data-action="add-leg"]').forEach(el => el.addEventListener('click', () => {
+        state.modal = 'addLeg';
+        render();
+      }));
+      $$('[data-action="end-voyage"]').forEach(el => el.addEventListener('click', () => {
+        state.modal = 'endVoyage';
+        render();
+      }));
+      $$('[data-action="reopen-voyage"]').forEach(el => el.addEventListener('click', () => {
+        const v = VOYAGES.find(x => x.id === state.selected.voyageId);
+        if (v) v.status = 'active';
+        render();
+      }));
+    }
+
+    window.addEventListener('hashchange', () => {
+      state.modal = location.hash === '#conflict' ? 'conflict' : null;
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
