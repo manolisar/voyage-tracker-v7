@@ -60,7 +60,10 @@ export function defaultLeg(shipClass) {
     id: newId(),
     departure: defaultReport(shipClass, REPORT_TYPES.DEPARTURE),
     arrival: defaultReport(shipClass, REPORT_TYPES.ARRIVAL),
-    voyageReport: null,
+    // v6 made voyageReport optional and user-created; v7 always surfaces the
+    // Voyage Report tree node per leg, so we always seed an empty one. The
+    // mockup treats it as a first-class companion to Departure/Arrival.
+    voyageReport: defaultVoyageReport(),
   };
 }
 

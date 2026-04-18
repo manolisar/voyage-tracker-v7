@@ -171,15 +171,13 @@ function LegNode({ entry, leg, index }) {
             label="Arrival"
             icon="↘"
           />
-          {leg.voyageReport && (
-            <ReportChild
-              filename={entry.filename}
-              legId={leg.id}
-              kind="voyageReport"
-              label="Voyage Report"
-              icon="⎈"
-            />
-          )}
+          <ReportChild
+            filename={entry.filename}
+            legId={leg.id}
+            kind="voyageReport"
+            label="Voyage Report"
+            icon="⎈"
+          />
         </div>
       )}
     </div>

@@ -73,6 +73,11 @@ export function VoyageStoreProvider({ children }) {
   const [listLoading, setListLoading] = useState(false);
   // Pending conflict, surfaces <ConflictModal>. Shape: { filename } or null.
   const [conflict, setConflict] = useState(null);
+  // Manual carry-over source. Set whenever the user enters an END value in a
+  // phase's equipment row. Shape:
+  //   { filename, legId, kind: 'departure'|'arrival', phaseId, phaseName,
+  //     equipment: { [equipKey]: endValue } }
+  const [lastEditedPhase, setLastEditedPhase] = useState(null);
 
   // One pending-save timer per filename.
   const saveTimers = useRef(new Map());
@@ -478,6 +483,89 @@ export function VoyageStoreProvider({ children }) {
     setSelected({ filename, kind: 'voyageEnd' });
   }, [updateVoyage]);
 
+  // ── Manual carry-over (phase END → next phase START) ──────────────────
+  // v7 keeps v6's manual-only model: the engineer edits END counters in a
+  // phase, then clicks FloatingCarryOverButton → ManualCarryOverModal to push
+  // selected values into the next phase's START.
+  //
+  // trackPhaseEnd — called from DetailPane when it detects that an equipment
+  // .end field changed. Stamps `lastEditedPhase` so the floating button knows
+  // where the carry-over is coming from.
+  const trackPhaseEnd = useCallback((source) => {
+    if (!source) { setLastEditedPhase(null); return; }
+    setLastEditedPhase(source);
+  }, []);
+
+  // Walk: within-report next phase → dep→arrival within same leg → arrival
+  // of leg N → departure of leg N+1. Returns a "target" descriptor for the
+  // modal (or null when there is no next phase).
+  const findNextPhaseFor = useCallback((source) => {
+    if (!source) return null;
+    // Use drafts/loadedById directly — effectiveById is declared below us and
+    // would trip TDZ if we referenced it here.
+    const v = drafts[source.filename] || loadedById[source.filename];
+    if (!v) return null;
+    const legIdx = v.legs.findIndex((l) => l.id === source.legId);
+    if (legIdx < 0) return null;
+    const leg = v.legs[legIdx];
+    const report = source.kind === 'departure' ? leg.departure : leg.arrival;
+    if (!report?.phases) return null;
+    const phaseIdx = report.phases.findIndex((p) => p.id === source.phaseId);
+    if (phaseIdx < 0) return null;
+
+    const buildTarget = (destLegId, destKind, destPhase) => ({
+      filename: source.filename,
+      legId: destLegId,
+      kind: destKind,
+      phaseId: destPhase.id,
+      phaseName: destPhase.name || (destKind === 'departure' ? 'Departure Phase' : 'Arrival Phase'),
+    });
+
+    // Next phase within the same report.
+    if (phaseIdx < report.phases.length - 1) {
+      return buildTarget(leg.id, source.kind, report.phases[phaseIdx + 1]);
+    }
+    // Departure → first arrival phase of the same leg.
+    if (source.kind === 'departure' && leg.arrival?.phases?.length > 0) {
+      return buildTarget(leg.id, 'arrival', leg.arrival.phases[0]);
+    }
+    // Arrival (last phase) → first departure phase of the next leg.
+    if (source.kind === 'arrival' && legIdx < v.legs.length - 1) {
+      const nextLeg = v.legs[legIdx + 1];
+      const destPhase = nextLeg?.departure?.phases?.[0];
+      if (destPhase) return buildTarget(nextLeg.id, 'departure', destPhase);
+    }
+    return null;
+  }, [drafts, loadedById]);
+
+  // applyCarryOver — copy the chosen END values into `target`'s phase START
+  // fields. `counters` = { [equipKey]: value }.
+  const applyCarryOver = useCallback((target, counters) => {
+    if (!target) return;
+    const entries = Object.entries(counters || {}).filter(([, v]) => v !== '' && v != null);
+    if (!entries.length) return;
+    updateVoyage(target.filename, (v) => ({
+      ...v,
+      legs: v.legs.map((l) => {
+        if (l.id !== target.legId) return l;
+        const rep = target.kind === 'departure' ? l.departure : l.arrival;
+        if (!rep?.phases) return l;
+        const nextPhases = rep.phases.map((p) => {
+          if (p.id !== target.phaseId) return p;
+          const eqNext = { ...p.equipment };
+          for (const [key, val] of entries) {
+            if (eqNext[key]) eqNext[key] = { ...eqNext[key], start: String(val) };
+          }
+          return { ...p, equipment: eqNext };
+        });
+        return target.kind === 'departure'
+          ? { ...l, departure: { ...rep, phases: nextPhases } }
+          : { ...l, arrival:   { ...rep, phases: nextPhases } };
+      }),
+    }));
+    setLastEditedPhase(null);
+  }, [updateVoyage]);
+
   // Filtered + searched view of the manifest.
   const visibleVoyages = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -517,6 +605,11 @@ export function VoyageStoreProvider({ children }) {
     endVoyage,
     discardDraft,
     flushSave,
+    // carry-over
+    lastEditedPhase,
+    trackPhaseEnd,
+    findNextPhaseFor,
+    applyCarryOver,
     // conflict
     conflict,
     reloadFromRemote,
@@ -539,6 +632,7 @@ export function VoyageStoreProvider({ children }) {
   }), [
     voyages, visibleVoyages, effectiveById, loadingFiles, listLoading, listError,
     dirty, saving, updateVoyage, createVoyage, addLeg, endVoyage, discardDraft, flushSave,
+    lastEditedPhase, trackPhaseEnd, findNextPhaseFor, applyCarryOver,
     conflict, reloadFromRemote, forceOverwrite, cancelConflict,
     selected, expanded, select, toggleExpand, expand, expandAll, collapseAll,
     filter, search,

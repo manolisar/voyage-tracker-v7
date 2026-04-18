@@ -10,10 +10,11 @@
 //   { filename, kind: 'voyageReport', legId }             → VoyageReportDetail / VoyageReportSection
 //   { filename, kind: 'voyageEnd' }                       → VoyageEndDetail
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
 import { defaultDensities } from '../../domain/shipClass';
+import { defaultVoyageReport } from '../../domain/factories';
 import { EmptyState } from '../detail/EmptyState';
 import { VoyageDetail } from '../detail/VoyageDetail';
 import { ReportDetail } from '../detail/ReportDetail';
@@ -21,10 +22,17 @@ import { VoyageReportDetail } from '../detail/VoyageReportDetail';
 import { VoyageEndDetail } from '../detail/VoyageEndDetail';
 import { ReportForm } from '../voyage/ReportForm';
 import { VoyageReportSection } from '../voyage/VoyageReportSection';
+import { FloatingCarryOverButton } from '../ui/FloatingCarryOverButton';
+import { ManualCarryOverModal } from '../modals/ManualCarryOverModal';
 
 export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
   const { editMode } = useAuth();
-  const { selected, loadedById, loadVoyage, loadingFiles, updateVoyage } = useVoyageStore();
+  const {
+    selected, loadedById, loadVoyage, loadingFiles, updateVoyage,
+    trackPhaseEnd,
+  } = useVoyageStore();
+
+  const [carryOverOpen, setCarryOverOpen] = useState(false);
 
   // Lazily make sure the selected voyage is loaded.
   useEffect(() => {
@@ -34,12 +42,48 @@ export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
   }, [selected, loadedById, loadVoyage]);
 
   // Helper: produce an `onChange` for a given leg's report (departure|arrival).
+  // Also diffs the incoming report against the previous one to detect the
+  // LATEST phase whose equipment END value changed — when we find one, we
+  // stamp it into `lastEditedPhase` so the floating carry-over button knows
+  // where to carry from.
   const onReportChange = useCallback((filename, legId, kind, newReport) => {
-    updateVoyage(filename, (v) => ({
-      ...v,
-      legs: v.legs.map((l) => l.id === legId ? { ...l, [kind]: newReport } : l),
-    }));
-  }, [updateVoyage]);
+    updateVoyage(filename, (v) => {
+      const oldLeg = v.legs.find((l) => l.id === legId);
+      const oldReport = oldLeg?.[kind];
+      // Find the phase whose equipment END value just changed, if any.
+      if (oldReport?.phases && newReport?.phases) {
+        for (const newPhase of newReport.phases) {
+          const oldPhase = oldReport.phases.find((p) => p.id === newPhase.id);
+          if (!oldPhase) continue;
+          let changedEndKey = null;
+          for (const eqKey of Object.keys(newPhase.equipment || {})) {
+            const newEnd = newPhase.equipment?.[eqKey]?.end;
+            const oldEnd = oldPhase.equipment?.[eqKey]?.end;
+            if (newEnd !== oldEnd) { changedEndKey = eqKey; break; }
+          }
+          if (changedEndKey) {
+            // Build the equipment snapshot from the NEW phase so the modal
+            // previews fresh values.
+            const equipmentSnapshot = {};
+            for (const [k, eq] of Object.entries(newPhase.equipment || {})) {
+              if (eq?.end !== '' && eq?.end != null) equipmentSnapshot[k] = eq.end;
+            }
+            trackPhaseEnd({
+              filename, legId, kind,
+              phaseId: newPhase.id,
+              phaseName: newPhase.name || (kind === 'departure' ? 'Departure Phase' : 'Arrival Phase'),
+              equipment: equipmentSnapshot,
+            });
+            break;
+          }
+        }
+      }
+      return {
+        ...v,
+        legs: v.legs.map((l) => l.id === legId ? { ...l, [kind]: newReport } : l),
+      };
+    });
+  }, [updateVoyage, trackPhaseEnd]);
 
   const onVoyageReportChange = useCallback((filename, legId, newVR) => {
     updateVoyage(filename, (v) => ({
@@ -107,6 +151,13 @@ export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
             densities={densities}
             onChange={(newReport) => onReportChange(voyage.filename, leg.id, selected.kind, newReport)}
           />
+          <FloatingCarryOverButton onClick={() => setCarryOverOpen(true)} />
+          {carryOverOpen && (
+            <ManualCarryOverModal
+              shipClass={shipClass}
+              onClose={() => setCarryOverOpen(false)}
+            />
+          )}
         </div>
       );
     }
@@ -121,11 +172,18 @@ export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
   }
 
   if (selected.kind === 'voyageReport') {
-    if (editMode && leg.voyageReport) {
+    // Legacy legs (pre-v7 imports) may have voyageReport: null. Seed an empty
+    // one on first visit so the form has something to bind to. The mockup
+    // treats Voyage Report as always-present per leg.
+    const vr = leg.voyageReport || defaultVoyageReport();
+    if (editMode) {
+      if (!leg.voyageReport) {
+        onVoyageReportChange(voyage.filename, leg.id, vr);
+      }
       return (
         <div className="max-w-5xl mx-auto">
           <VoyageReportSection
-            voyageReport={leg.voyageReport}
+            voyageReport={vr}
             depPort={leg.departure?.port}
             arrPort={leg.arrival?.port}
             depDate={leg.departure?.date}
@@ -136,7 +194,7 @@ export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
         </div>
       );
     }
-    return <VoyageReportDetail leg={leg} />;
+    return <VoyageReportDetail leg={{ ...leg, voyageReport: vr }} />;
   }
 
   return <EmptyState ship={ship} />;
