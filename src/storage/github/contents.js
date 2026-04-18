@@ -153,6 +153,62 @@ export async function saveVoyage(ctx, shipId, filename, voyage, prevSha, meta = 
 }
 
 /**
+ * Upsert an entry in `data/<shipId>/_index.json`.
+ *
+ * `entry` = { filename, id, name, startDate, endDate, ended }
+ *
+ * Strategy: read the current index (404 → fresh), remove any existing entry
+ * for the same filename, push the new one, sort by startDate desc, write.
+ *
+ * If `entry` is null, the `filename` arg is treated as a deletion.
+ *
+ * @param {object} ctx
+ * @param {string} shipId
+ * @param {string} filename   voyage filename to upsert / remove
+ * @param {object|null} entry updated manifest entry, or null to delete
+ * @param {object} [meta] { editorRole }
+ */
+export async function upsertShipIndex(ctx, shipId, filename, entry, meta = {}) {
+  ensureSafeShip(shipId);
+  ensureSafeFilename(filename);
+  const indexPath = shipDataPath(shipId, '_index.json');
+
+  let current = { version: 1, voyages: [] };
+  let prevSha = null;
+  try {
+    const { voyage: idx, sha } = await loadJson(ctx, indexPath);
+    if (idx && Array.isArray(idx.voyages)) current = { version: 1, ...idx };
+    prevSha = sha;
+  } catch (e) {
+    if (!(e instanceof NotFoundError)) throw e;
+  }
+
+  const remaining = current.voyages.filter((v) => v.filename !== filename);
+  const next = entry ? [...remaining, entry] : remaining;
+  next.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+
+  const payload = { ...current, voyages: next };
+  const message = formatCommitMessage({
+    action: entry ? 'reindex' : 'reindex-remove',
+    shipId,
+    filename: '_index.json',
+    voyage: entry ? { name: entry.name, startDate: entry.startDate } : null,
+    editorRole: meta.editorRole || null,
+  });
+  const body = {
+    message,
+    content: b64encodeUtf8(JSON.stringify(payload, null, 2) + '\n'),
+    ...(ctx.branch ? { branch: ctx.branch } : {}),
+    ...(prevSha ? { sha: prevSha } : {}),
+  };
+  await ghFetch(`/repos/${ctx.owner}/${ctx.repo}/contents/${indexPath.split('/').map(encodeURIComponent).join('/')}`, {
+    method: 'PUT',
+    body,
+    getToken: ctx.getToken,
+  });
+}
+
+/**
  * Delete a voyage. Requires the prior SHA per Contents API.
  */
 export async function deleteVoyage(ctx, shipId, filename, prevSha, meta = {}) {

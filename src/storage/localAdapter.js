@@ -49,4 +49,7 @@ export const localAdapter = {
       shipId, filename, hasPrevSha: !!prevSha,
     });
   },
+
+  // _index.json maintenance has no meaning against /public/data/ (static).
+  async upsertIndex() { /* no-op */ },
 };

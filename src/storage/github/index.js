@@ -16,7 +16,7 @@
 // always sees the freshest auth state without needing to be rebuilt on PAT
 // rotation or role change.
 
-import { listVoyages, loadVoyage, saveVoyage, deleteVoyage } from './contents';
+import { listVoyages, loadVoyage, saveVoyage, deleteVoyage, upsertShipIndex } from './contents';
 import { listRecentCommits } from './commits';
 import { loadAuthJson, saveAuthJson, bootstrapShipIndex } from './authConfig';
 
@@ -42,6 +42,11 @@ export function createGithubAdapter({
       saveVoyage(ctx, shipId, filename, voyage, prevSha, { editorRole: getEditorRole() }),
     deleteVoyage: (shipId, filename, prevSha) =>
       deleteVoyage(ctx, shipId, filename, prevSha, { editorRole: getEditorRole() }),
+    // Called by createVoyage / endVoyage so the manifest (_index.json) tracks
+    // the latest status flag and any new filenames. Fire-and-forget — errors
+    // are logged but not surfaced to the user.
+    upsertIndex: (shipId, filename, entry) =>
+      upsertShipIndex(ctx, shipId, filename, entry, { editorRole: getEditorRole() }),
 
     // Admin-only ops (Phase 6). Present only on the github adapter.
     admin: {

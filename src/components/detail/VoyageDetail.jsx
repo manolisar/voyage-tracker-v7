@@ -37,7 +37,7 @@ function lastAep(voyage) {
   return null;
 }
 
-export function VoyageDetail({ voyage, shipClass, ship }) {
+export function VoyageDetail({ voyage, shipClass, ship, editMode, onAddLeg, onEndVoyage }) {
   const totals = calcVoyageTotals(voyage, shipClass);
   const ended = !!voyage.voyageEnd;
   const rob = lastReportRob(voyage);
@@ -169,7 +169,30 @@ export function VoyageDetail({ voyage, shipClass, ship }) {
       </section>
 
       {/* Legs list */}
-      <div className="section-label mb-3">Legs</div>
+      <div className="flex items-center mb-3">
+        <div className="section-label">Legs</div>
+        <div className="flex-1" />
+        {editMode && !ended && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-primary px-3 py-1.5 rounded-lg text-xs"
+              onClick={() => onAddLeg?.(filename)}
+              title="Append a new leg to this voyage"
+            >
+              + Add Leg
+            </button>
+            <button
+              type="button"
+              className="btn-warning px-3 py-1.5 rounded-lg text-xs"
+              onClick={() => onEndVoyage?.(filename)}
+              title="Finalize voyage and record lub-oil"
+            >
+              ⚑ End Voyage
+            </button>
+          </div>
+        )}
+      </div>
       <div className="cat-card legs">
         <div className="cat-label">{voyage.legs?.length || 0} Legs</div>
         <div className="cat-body">

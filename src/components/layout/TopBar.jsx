@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { EDITOR_ROLE_LABELS } from '../../domain/constants';
 import { Anchor, Edit, Eye, LogOut, Menu, Moon, Settings, Sun, Unlock } from '../Icons';
 
-export function TopBar({ ship, onToggleSidebar, onOpenEditModal, onOpenAdmin }) {
+export function TopBar({ ship, onToggleSidebar, onOpenEditModal, onOpenAdmin, onNewVoyage }) {
   const { theme, toggleTheme } = useTheme();
   const { editMode, editor, exitEditMode, logout } = useAuth();
 
@@ -64,14 +64,24 @@ export function TopBar({ ship, onToggleSidebar, onOpenEditModal, onOpenAdmin }) 
       </span>
 
       {editMode ? (
-        <button
-          type="button"
-          onClick={exitEditMode}
-          className="btn-flat px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
-        >
-          <Unlock className="w-3.5 h-3.5" />
-          Exit Edit
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={onNewVoyage}
+            className="btn-primary px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
+            title="Create a new voyage"
+          >
+            + New Voyage
+          </button>
+          <button
+            type="button"
+            onClick={exitEditMode}
+            className="btn-flat px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
+          >
+            <Unlock className="w-3.5 h-3.5" />
+            Exit Edit
+          </button>
+        </>
       ) : (
         <button
           type="button"

@@ -23,6 +23,9 @@ import { VoyageTree } from '../tree/VoyageTree';
 import { EditModeModal } from '../auth/EditModeModal';
 import { PatEntryModal } from '../modals/PatEntryModal';
 import { AdminPanel } from '../modals/AdminPanel';
+import { NewVoyageModal } from '../modals/NewVoyageModal';
+import { AddLegModal } from '../modals/AddLegModal';
+import { VoyageEndModal } from '../modals/VoyageEndModal';
 import { readRememberedPat } from '../../auth/patStorage';
 import { ConflictModal } from '../modals/ConflictModal';
 import { Eye, Cloud } from '../Icons';
@@ -76,6 +79,12 @@ export function AppShell() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [patModalOpen, setPatModalOpen] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [newVoyageOpen, setNewVoyageOpen] = useState(false);
+  // VoyageDetail opens Add-Leg / End-Voyage modals by setting these to the
+  // target voyage filename; null = closed. Centralizing them in AppShell
+  // keeps the modal lifecycle outside the scrolling detail pane.
+  const [addLegFor,   setAddLegFor]   = useState(null);
+  const [endVoyageFor, setEndVoyageFor] = useState(null);
 
   // ── Keep the module-level adapter closures in sync with auth state ─────
   // The adapter was installed synchronously at module load (above) so that
@@ -132,6 +141,7 @@ export function AppShell() {
           ship={ship}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
           onOpenEditModal={() => setEditModalOpen(true)}
+          onNewVoyage={() => setNewVoyageOpen(true)}
           onOpenAdmin={() => {
             // No PAT yet → ask for one. Otherwise open the real Admin Panel.
             // (When VITE_DATA_REPO is unset entirely we still surface the PAT
@@ -184,7 +194,12 @@ export function AppShell() {
           </aside>
 
           <main id="main-content" className="flex-1 min-h-0 overflow-y-auto p-6 md:p-8" tabIndex={-1}>
-            <DetailPane ship={ship} shipClass={shipClass} />
+            <DetailPane
+              ship={ship}
+              shipClass={shipClass}
+              onAddLeg={(filename) => setAddLegFor(filename)}
+              onEndVoyage={(filename) => setEndVoyageFor(filename)}
+            />
           </main>
         </div>
 
@@ -208,6 +223,29 @@ export function AppShell() {
 
         {adminPanelOpen && (
           <AdminPanel onClose={() => setAdminPanelOpen(false)} />
+        )}
+
+        {newVoyageOpen && (
+          <NewVoyageModal
+            shipClass={shipClass}
+            onClose={() => setNewVoyageOpen(false)}
+          />
+        )}
+
+        {addLegFor && (
+          <AddLegModal
+            filename={addLegFor}
+            shipClass={shipClass}
+            onClose={() => setAddLegFor(null)}
+          />
+        )}
+
+        {endVoyageFor && (
+          <VoyageEndModal
+            filename={endVoyageFor}
+            shipClass={shipClass}
+            onClose={() => setEndVoyageFor(null)}
+          />
         )}
 
         <ConflictModalHost />

@@ -14,7 +14,38 @@ import { useAuth } from '../hooks/useAuth';
 import { getStorageAdapter, ConflictError } from '../storage/adapter';
 import { safePutDraft, safeDeleteDraft } from '../storage/indexeddb';
 import { AUTO_SAVE_DELAY_MS } from '../domain/constants';
+import { defaultVoyage, defaultLeg, defaultVoyageEnd } from '../domain/factories';
 import { VoyageStoreContext } from './VoyageStoreContext';
+
+// Build the on-disk filename from the voyage name + start date:
+//   2026-04-18_Singapore_to_Hong_Kong.json
+// Must survive the path-safety regex `/^[A-Za-z0-9._-]+$/` in contents.js,
+// so we replace anything non-alphanumeric with an underscore and collapse runs.
+function slugify(s) {
+  return (s || '')
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 120);
+}
+function buildFilename(startDate, name) {
+  const slug = slugify(name) || 'voyage';
+  const date = (startDate || '').trim() || new Date().toISOString().slice(0, 10);
+  return `${date}_${slug}.json`;
+}
+
+function manifestEntryFrom(voyage) {
+  return {
+    filename: voyage.filename,
+    id: voyage.id,
+    name: voyage.name || '',
+    startDate: voyage.startDate || '',
+    endDate: voyage.endDate || '',
+    ended: !!voyage.voyageEnd,
+  };
+}
 
 // Selection shape:
 //   { filename, kind: 'voyage'|'leg'|'departure'|'arrival'|'voyageReport'|'voyageEnd', legId? }
@@ -45,6 +76,10 @@ export function VoyageStoreProvider({ children }) {
 
   // One pending-save timer per filename.
   const saveTimers = useRef(new Map());
+  // Mirror of `voyages` for access inside async callbacks (flushSave), which
+  // can't rely on closed-over state because they run after the save round-trip.
+  const voyagesRef = useRef(voyages);
+  useEffect(() => { voyagesRef.current = voyages; }, [voyages]);
 
   // Refresh the manifest from the adapter.
   const refreshList = useCallback(async () => {
@@ -116,6 +151,31 @@ export function VoyageStoreProvider({ children }) {
         const n = new Set(prev); n.delete(filename); return n;
       });
       safeDeleteDraft(shipId, filename);
+
+      // Manifest sync: if any manifest-level field changed (name / dates /
+      // ended), upsert _index.json and refresh our local `voyages` state.
+      // Fire-and-forget — a failed index write isn't fatal; the next listing
+      // will fall back to directory enumeration.
+      const freshEntry = manifestEntryFrom(stamped);
+      const existing = voyagesRef.current.find((v) => v.filename === filename);
+      const manifestChanged = !existing
+        || existing.name !== freshEntry.name
+        || existing.startDate !== freshEntry.startDate
+        || existing.endDate !== freshEntry.endDate
+        || !!existing.ended !== freshEntry.ended;
+      if (manifestChanged) {
+        setVoyages((list) => {
+          const without = list.filter((v) => v.filename !== filename);
+          return [...without, freshEntry].sort((a, b) =>
+            (b.startDate || '').localeCompare(a.startDate || ''));
+        });
+        const upsert = getStorageAdapter().upsertIndex;
+        if (typeof upsert === 'function') {
+          upsert(shipId, filename, freshEntry).catch((err) =>
+            console.warn('[VoyageStore] _index.json upsert failed (non-fatal)', err),
+          );
+        }
+      }
     } catch (e) {
       if (e instanceof ConflictError) {
         // Surface the modal — don't auto-resolve.
@@ -163,6 +223,56 @@ export function VoyageStoreProvider({ children }) {
     });
     scheduleSave(filename);
   }, [loadedById, scheduleSave, shipId]);
+
+  // Create a new voyage file. `partial` carries user-supplied fields from the
+  // NewVoyageModal; we fill the rest from the ship-class defaults.
+  //
+  //   partial = { name, startDate, endDate?, shipClass }
+  //
+  // Returns the new filename so callers can select it.
+  const createVoyage = useCallback(async (partial) => {
+    if (!shipId) throw new Error('createVoyage: no shipId');
+    if (!partial?.shipClass) throw new Error('createVoyage: shipClass required');
+    if (!partial?.name?.trim()) throw new Error('createVoyage: name required');
+
+    const filename = buildFilename(partial.startDate, partial.name);
+    const base = defaultVoyage(shipId, partial.shipClass);
+    const voyage = {
+      ...base,
+      name: partial.name.trim(),
+      startDate: partial.startDate || '',
+      endDate: partial.endDate || '',
+      filename,
+      lastModified: new Date().toISOString(),
+    };
+
+    // Brand-new file → no prevSha. GitHub returns 409 if the file already
+    // exists under that name, which ConflictError surfaces to the caller.
+    const { sha } = await getStorageAdapter().saveVoyage(shipId, filename, voyage, null);
+    setLoadedById((s) => ({ ...s, [filename]: voyage }));
+    if (sha) setShaById((s) => ({ ...s, [filename]: sha }));
+
+    const entry = manifestEntryFrom(voyage);
+    setVoyages((list) => {
+      const without = list.filter((v) => v.filename !== filename);
+      return [...without, entry].sort((a, b) =>
+        (b.startDate || '').localeCompare(a.startDate || ''));
+    });
+    // Upsert index; fire-and-forget (directory listing is our safety net).
+    const upsert = getStorageAdapter().upsertIndex;
+    if (typeof upsert === 'function') {
+      upsert(shipId, filename, entry).catch((err) =>
+        console.warn('[VoyageStore] _index.json upsert failed (non-fatal)', err),
+      );
+    }
+
+    // Expand + select the new voyage so the user lands on its detail page.
+    setExpanded((prev) => {
+      const next = new Set(prev); next.add(filename); return next;
+    });
+    setSelected({ filename, kind: 'voyage' });
+    return filename;
+  }, [shipId]);
 
   // Discard local edits.
   const discardDraft = useCallback((filename) => {
@@ -230,6 +340,20 @@ export function VoyageStoreProvider({ children }) {
     });
   }, []);
 
+  // Expand every voyage in the current list (top level). Leg-level expansion
+  // stays user-driven — legs aren't known until the voyage is loaded.
+  const expandAll = useCallback(() => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const v of voyages) next.add(v.filename);
+      return next;
+    });
+  }, [voyages]);
+
+  const collapseAll = useCallback(() => {
+    setExpanded(new Set());
+  }, []);
+
   // Select + auto-expand the parent voyage so the user always sees the path.
   const select = useCallback(async (sel) => {
     setSelected(sel);
@@ -239,6 +363,82 @@ export function VoyageStoreProvider({ children }) {
       if (!loadedById[sel.filename]) loadVoyage(sel.filename);
     }
   }, [expand, loadedById, loadVoyage]);
+
+  // Add a new leg to a voyage. Options:
+  //   shipClass      — required, factories use it for default equipment keys
+  //   fromPort       — prefills leg.departure.port
+  //   toPort         — prefills leg.arrival.port
+  //   depDate        — prefills leg.departure.date
+  //   arrDate        — prefills leg.arrival.date
+  //   carryOverFrom  — a previous leg to copy equipment END → new leg's
+  //                    departure START + arrival START (matches v6 behavior).
+  const addLeg = useCallback((filename, {
+    shipClass,
+    fromPort = '',
+    toPort = '',
+    depDate = '',
+    arrDate = '',
+    carryOverFrom = null,
+  }) => {
+    if (!shipClass) throw new Error('addLeg: shipClass required');
+    const leg = defaultLeg(shipClass);
+    if (fromPort) leg.departure.port = fromPort;
+    if (toPort)   leg.arrival.port   = toPort;
+    if (depDate)  leg.departure.date = depDate;
+    if (arrDate)  leg.arrival.date   = arrDate;
+
+    if (carryOverFrom?.arrival?.phases) {
+      // Copy last-phase `end` counters from the previous leg's arrival into
+      // the new leg's departure + arrival starts, per v6's carry-over rule.
+      const srcPhases = carryOverFrom.arrival.phases;
+      const srcLast = srcPhases[srcPhases.length - 1];
+      if (srcLast?.equipment) {
+        for (const key of Object.keys(leg.departure.phases[0]?.equipment || {})) {
+          const endVal = srcLast.equipment[key]?.end;
+          if (endVal) leg.departure.phases[0].equipment[key].start = endVal;
+        }
+        for (const key of Object.keys(leg.arrival.phases[0]?.equipment || {})) {
+          const endVal = srcLast.equipment[key]?.end;
+          if (endVal) leg.arrival.phases[0].equipment[key].start = endVal;
+        }
+      }
+    }
+
+    updateVoyage(filename, (v) => ({ ...v, legs: [...(v.legs || []), leg] }));
+    // Expand the new leg so the user can see Dep/Arr right away, and select
+    // its Departure — that's almost always the next field they'll edit.
+    const key = `${filename}::${leg.id}`;
+    setExpanded((prev) => {
+      const next = new Set(prev); next.add(key); next.add(filename); return next;
+    });
+    setSelected({ filename, kind: 'departure', legId: leg.id });
+    return leg.id;
+  }, [updateVoyage]);
+
+  // End a voyage. Writes voyage.voyageEnd + voyage.endDate, which triggers a
+  // manifest sync inside flushSave. Selects the Voyage End node.
+  const endVoyage = useCallback((filename, {
+    shipClass,
+    endDate = '',
+    engineer = '',
+    notes = '',
+    lubeOil = null,
+  }) => {
+    if (!shipClass) throw new Error('endVoyage: shipClass required');
+    const nowDate = endDate || new Date().toISOString().slice(0, 10);
+    updateVoyage(filename, (v) => ({
+      ...v,
+      endDate: nowDate,
+      voyageEnd: {
+        ...defaultVoyageEnd(shipClass),
+        completedAt: new Date().toISOString(),
+        engineer,
+        notes,
+        lubeOil: lubeOil || defaultVoyageEnd(shipClass).lubeOil,
+      },
+    }));
+    setSelected({ filename, kind: 'voyageEnd' });
+  }, [updateVoyage]);
 
   // Filtered + searched view of the manifest.
   const visibleVoyages = useMemo(() => {
@@ -274,6 +474,9 @@ export function VoyageStoreProvider({ children }) {
     dirty,
     saving,
     updateVoyage,
+    createVoyage,
+    addLeg,
+    endVoyage,
     discardDraft,
     flushSave,
     // conflict
@@ -287,6 +490,8 @@ export function VoyageStoreProvider({ children }) {
     select,
     toggleExpand,
     expand,
+    expandAll,
+    collapseAll,
     // queries
     filter, setFilter,
     search, setSearch,
@@ -295,9 +500,9 @@ export function VoyageStoreProvider({ children }) {
     loadVoyage,
   }), [
     voyages, visibleVoyages, effectiveById, loadingFiles, listLoading, listError,
-    dirty, saving, updateVoyage, discardDraft, flushSave,
+    dirty, saving, updateVoyage, createVoyage, addLeg, endVoyage, discardDraft, flushSave,
     conflict, reloadFromRemote, forceOverwrite, cancelConflict,
-    selected, expanded, select, toggleExpand, expand,
+    selected, expanded, select, toggleExpand, expand, expandAll, collapseAll,
     filter, search,
     refreshList, loadVoyage,
   ]);

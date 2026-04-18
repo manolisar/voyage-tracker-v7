@@ -11,7 +11,10 @@ const FILTERS = [
 ];
 
 export function TreeToolbar() {
-  const { search, setSearch, filter, setFilter, refreshList, listLoading } = useVoyageStore();
+  const {
+    search, setSearch, filter, setFilter, refreshList, listLoading,
+    expandAll, collapseAll,
+  } = useVoyageStore();
 
   return (
     <div
@@ -57,16 +60,38 @@ export function TreeToolbar() {
           })}
         </div>
         <div className="flex-1" />
-        <button
-          type="button"
-          onClick={refreshList}
-          disabled={listLoading}
-          className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
-          aria-label="Refresh voyage list"
-          title="Refresh"
-        >
-          <Refresh className={`w-3.5 h-3.5 ${listLoading ? 'animate-spin' : ''}`} style={{ color: 'var(--color-dim)' }} />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-[0.9rem] leading-none"
+            aria-label="Expand all voyages"
+            title="Expand all"
+            style={{ color: 'var(--color-dim)' }}
+          >
+            ⊞
+          </button>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-[0.9rem] leading-none"
+            aria-label="Collapse all voyages"
+            title="Collapse all"
+            style={{ color: 'var(--color-dim)' }}
+          >
+            ⊟
+          </button>
+          <button
+            type="button"
+            onClick={refreshList}
+            disabled={listLoading}
+            className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
+            aria-label="Refresh voyage list"
+            title="Refresh"
+          >
+            <Refresh className={`w-3.5 h-3.5 ${listLoading ? 'animate-spin' : ''}`} style={{ color: 'var(--color-dim)' }} />
+          </button>
+        </div>
       </div>
     </div>
   );

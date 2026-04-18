@@ -22,7 +22,7 @@ import { VoyageEndDetail } from '../detail/VoyageEndDetail';
 import { ReportForm } from '../voyage/ReportForm';
 import { VoyageReportSection } from '../voyage/VoyageReportSection';
 
-export function DetailPane({ ship, shipClass }) {
+export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
   const { editMode } = useAuth();
   const { selected, loadedById, loadVoyage, loadingFiles, updateVoyage } = useVoyageStore();
 
@@ -62,7 +62,16 @@ export function DetailPane({ ship, shipClass }) {
   }
 
   if (selected.kind === 'voyage' || selected.kind === 'leg') {
-    return <VoyageDetail voyage={voyage} shipClass={shipClass} ship={ship} />;
+    return (
+      <VoyageDetail
+        voyage={voyage}
+        shipClass={shipClass}
+        ship={ship}
+        editMode={editMode}
+        onAddLeg={onAddLeg}
+        onEndVoyage={onEndVoyage}
+      />
+    );
   }
 
   if (selected.kind === 'voyageEnd') {
