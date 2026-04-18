@@ -9,7 +9,7 @@
 //   • Otherwise we fall back to the local-file adapter so dev mode without
 //     network still works against /public/data/.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
 import { loadShips, loadShipClass } from '../../domain/shipClass';
@@ -37,8 +37,36 @@ function parseRepo(slug) {
   return owner && repo ? { owner, repo } : null;
 }
 
-// Default to local adapter so dev without env works.
-if (!USE_GITHUB) setStorageAdapter(localAdapter);
+// ── Install the storage adapter SYNCHRONOUSLY at module load ──────────────
+// React effects run child-first, so if we set the adapter inside a useEffect
+// the VoyageTree's mount-time listVoyages() call lands BEFORE our effect
+// fires → "Storage adapter not initialized". Install it before any render.
+//
+// The adapter needs a live token + editor role, but those are in React state.
+// Solution: module-level mutables that the AppShell component pokes via
+// effects below. The adapter's getToken/getEditorRole are closures over
+// these, so PAT rotation never requires rebuilding the adapter.
+let currentToken = null;
+let currentEditorRole = 'Other';
+
+if (USE_GITHUB) {
+  const parsed = parseRepo(DATA_REPO);
+  if (parsed) {
+    setStorageAdapter(createGithubAdapter({
+      owner:    parsed.owner,
+      repo:     parsed.repo,
+      branch:   DATA_BRANCH,
+      getToken:      () => currentToken,
+      getEditorRole: () => currentEditorRole,
+    }));
+  } else {
+    console.error('[AppShell] VITE_DATA_REPO must look like "owner/repo"; got', DATA_REPO);
+    setStorageAdapter(localAdapter);
+  }
+} else {
+  // Dev mode without a data-repo env — read from /public/data/.
+  setStorageAdapter(localAdapter);
+}
 
 export function AppShell() {
   const { shipId, editMode, editor, adminToken, setAdminPat } = useAuth();
@@ -49,30 +77,12 @@ export function AppShell() {
   const [patModalOpen, setPatModalOpen] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
 
-  // ── Boot the GitHub adapter once (if configured) ───────────────────────
-  // We build the adapter ONCE; getToken is a closure over a ref so PAT
-  // rotation doesn't require rebuilding the adapter.
-  const tokenRef = useRef(adminToken);
-  const editorRef = useRef(editor);
-  useEffect(() => { tokenRef.current = adminToken; }, [adminToken]);
-  useEffect(() => { editorRef.current = editor; }, [editor]);
-
-  useEffect(() => {
-    if (!USE_GITHUB) return;
-    const parsed = parseRepo(DATA_REPO);
-    if (!parsed) {
-      console.error('[AppShell] VITE_DATA_REPO must look like "owner/repo"; got', DATA_REPO);
-      setStorageAdapter(localAdapter);
-      return;
-    }
-    setStorageAdapter(createGithubAdapter({
-      owner:    parsed.owner,
-      repo:     parsed.repo,
-      branch:   DATA_BRANCH,
-      getToken: () => tokenRef.current,
-      getEditorRole: () => editorRef.current,
-    }));
-  }, []);
+  // ── Keep the module-level adapter closures in sync with auth state ─────
+  // The adapter was installed synchronously at module load (above) so that
+  // first-render listVoyages() doesn't race. These effects just feed it the
+  // live token + role. PAT rotation never rebuilds the adapter.
+  useEffect(() => { currentToken = adminToken; }, [adminToken]);
+  useEffect(() => { currentEditorRole = editor; }, [editor]);
 
   // Re-hydrate a remembered PAT (sessionStorage) on first render.
   useEffect(() => {
