@@ -14,6 +14,7 @@ import { useAuth } from '../hooks/useAuth';
 import { getStorageAdapter, ConflictError } from '../storage/adapter';
 import { safePutDraft, safeDeleteDraft } from '../storage/indexeddb';
 import { AUTO_SAVE_DELAY_MS } from '../domain/constants';
+import { calcVoyageTotals } from '../domain/calculations';
 import { defaultVoyage, defaultLeg, defaultVoyageEnd } from '../domain/factories';
 import { VoyageStoreContext } from './VoyageStoreContext';
 
@@ -459,7 +460,11 @@ export function VoyageStoreProvider({ children }) {
   }, [updateVoyage]);
 
   // End a voyage. Writes voyage.voyageEnd + voyage.endDate, which triggers a
-  // manifest sync inside flushSave. Selects the Voyage End node.
+  // manifest sync inside flushSave. Also computes the "Verified Totals"
+  // snapshot (fuel MT by type, sum of all arrival freshWater.consumption)
+  // so the Voyage End detail page has stable audit numbers baked in at
+  // close time — the rest of the voyage graph could drift after, these
+  // numbers represent the state AT close.
   const endVoyage = useCallback((filename, {
     shipClass,
     endDate = '',
@@ -469,17 +474,37 @@ export function VoyageStoreProvider({ children }) {
   }) => {
     if (!shipClass) throw new Error('endVoyage: shipClass required');
     const nowDate = endDate || new Date().toISOString().slice(0, 10);
-    updateVoyage(filename, (v) => ({
-      ...v,
-      endDate: nowDate,
-      voyageEnd: {
-        ...defaultVoyageEnd(shipClass),
-        completedAt: new Date().toISOString(),
-        engineer,
-        notes,
-        lubeOil: lubeOil || defaultVoyageEnd(shipClass).lubeOil,
-      },
-    }));
+    updateVoyage(filename, (v) => {
+      // Snapshot fuel totals across all legs using the voyage's densities.
+      const fuel = calcVoyageTotals(v, shipClass);
+      // Sum freshwater consumption recorded on each leg's arrival report.
+      let freshWaterCons = 0;
+      for (const leg of v.legs || []) {
+        const fw = parseFloat(leg.arrival?.freshWater?.consumption);
+        if (Number.isFinite(fw)) freshWaterCons += fw;
+      }
+      const base = defaultVoyageEnd(shipClass);
+      return {
+        ...v,
+        endDate: nowDate,
+        voyageEnd: {
+          ...base,
+          completedAt: new Date().toISOString(),
+          engineer,
+          notes,
+          lubeOil: lubeOil || base.lubeOil,
+          totals: {
+            hfo: fuel.hfo,
+            mgo: fuel.mgo,
+            lsfo: fuel.lsfo,
+            freshWaterCons,
+          },
+          // Snapshot the densities in effect at close so later density edits
+          // don't retroactively change what the verified totals mean.
+          densitiesAtClose: v.densities || base.densitiesAtClose,
+        },
+      };
+    });
     setSelected({ filename, kind: 'voyageEnd' });
   }, [updateVoyage]);
 

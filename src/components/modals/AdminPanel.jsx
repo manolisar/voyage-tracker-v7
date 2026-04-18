@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { getStorageAdapter } from '../../storage/adapter';
-import { loadAuthConfig, persistAuthConfig, _resetAuthConfigCache } from '../../auth/authConfig';
+import { loadAuthConfig, loadSeedAuthConfig, persistAuthConfig } from '../../auth/authConfig';
 import { writeRememberedPat } from '../../auth/patStorage';
 import { verifyToken } from '../../storage/github';
 import { loadShips } from '../../domain/shipClass';
@@ -122,16 +122,18 @@ export function AdminPanel({ onClose }) {
   };
 
   const handleSeedPin = async (shipId) => {
-    // Hash the canonical seed PIN for this ship and write it.
+    // Write the canonical seed PIN record into the PERSISTED auth.json.
+    // We must pull the seed record directly (loadSeedAuthConfig) instead of
+    // forcing a reload of loadAuthConfig() — that reload still prefers the
+    // GitHub copy, which by definition doesn't have this ship (that's why
+    // we're bootstrapping it). Bypassing GitHub guarantees we can always
+    // produce the canonical seed record for the ship.
     if (!admin) return;
     setBusyShipId(shipId);
     setToast(null);
     try {
       const cfg = await loadAuthConfig();
-      // The seed config is built from the SAME seed PINs, so we can just
-      // copy the ship record from the seed-fallback into the persisted one.
-      _resetAuthConfigCache();
-      const seedCfg = await loadAuthConfig({ force: true }); // re-fetch, may still be seed
+      const seedCfg = await loadSeedAuthConfig();
       const seedRecord = seedCfg.ships?.[shipId];
       if (!seedRecord) throw new Error(`No seed PIN defined for ${shipId}`);
       const next = { ...cfg, ships: { ...(cfg.ships || {}), [shipId]: seedRecord } };

@@ -5,11 +5,49 @@
 import { useState } from 'react';
 import { ChevronRight, Compass, X } from '../Icons';
 
-function calcAvgSpeed(distance, time) {
+// displayAvg: what to show in the form (em-dash if unknown).
+function displayAvg(distance, time) {
   const d = parseFloat(distance);
   const t = parseFloat(time);
   if (d > 0 && t > 0) return (d / t).toFixed(1);
   return '\u2013';
+}
+// persistAvg: the string to WRITE back into the voyage report. Same math,
+// but we return '' (not an em-dash) when inputs are incomplete so the JSON
+// stays round-trippable and the read-only detail view doesn't render
+// sentinel glyphs as if they were data.
+function persistAvg(distance, time) {
+  const d = parseFloat(distance);
+  const t = parseFloat(time);
+  if (d > 0 && t > 0) return (d / t).toFixed(1);
+  return '';
+}
+
+// Recompute every derived average speed on the voyage report so the stored
+// object is the one of record — the read-only VoyageReportDetail renders
+// `avgSpeed` / `averageSpeed` fields directly without recomputing.
+function withDerivedSpeeds(vr) {
+  return {
+    ...vr,
+    departure: {
+      ...vr.departure,
+      pierToFA: {
+        ...vr.departure.pierToFA,
+        avgSpeed: persistAvg(vr.departure.pierToFA.distance, vr.departure.pierToFA.time),
+      },
+    },
+    voyage: {
+      ...vr.voyage,
+      averageSpeed: persistAvg(vr.voyage.totalMiles, vr.voyage.steamingTime),
+    },
+    arrival: {
+      ...vr.arrival,
+      sbeToBerth: {
+        ...vr.arrival.sbeToBerth,
+        avgSpeed: persistAvg(vr.arrival.sbeToBerth.distance, vr.arrival.sbeToBerth.time),
+      },
+    },
+  };
 }
 
 export function VoyageReportSection({
@@ -25,13 +63,16 @@ export function VoyageReportSection({
   const vr = voyageReport;
 
   const updateField  = (section, field, value) =>
-    onChange({ ...vr, [section]: { ...vr[section], [field]: value } });
+    onChange(withDerivedSpeeds({ ...vr, [section]: { ...vr[section], [field]: value } }));
   const updateNested = (section, sub, field, value) =>
-    onChange({ ...vr, [section]: { ...vr[section], [sub]: { ...vr[section][sub], [field]: value } } });
+    onChange(withDerivedSpeeds({
+      ...vr,
+      [section]: { ...vr[section], [sub]: { ...vr[section][sub], [field]: value } },
+    }));
 
-  const voyageAvgSpeed   = calcAvgSpeed(vr.voyage.totalMiles, vr.voyage.steamingTime);
-  const pierToFASpeed    = calcAvgSpeed(vr.departure.pierToFA.distance, vr.departure.pierToFA.time);
-  const sbeToBerthSpeed  = calcAvgSpeed(vr.arrival.sbeToBerth.distance, vr.arrival.sbeToBerth.time);
+  const voyageAvgSpeed   = displayAvg(vr.voyage.totalMiles, vr.voyage.steamingTime);
+  const pierToFASpeed    = displayAvg(vr.departure.pierToFA.distance, vr.departure.pierToFA.time);
+  const sbeToBerthSpeed  = displayAvg(vr.arrival.sbeToBerth.distance, vr.arrival.sbeToBerth.time);
 
   return (
     <div className="cat-card nav rounded-xl overflow-hidden mb-4">

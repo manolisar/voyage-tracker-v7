@@ -93,17 +93,31 @@ export function AuthProvider({ children }) {
 
   // Try to enter edit mode by verifying a PIN against the loaded auth.json.
   // Returns true on success, false on bad PIN, throws on infra error.
-  const enterEditMode = useCallback(async ({ pin, role }) => {
-    if (!shipId) throw new Error('No ship selected');
+  //
+  // `shipIdOverride` lets LandingScreen do ship-select + edit-unlock atomically:
+  // verify the PIN FIRST (without touching ship state), and on success commit
+  // both shipId and the edit session together. This sidesteps the race where
+  // a separate selectShip() call wouldn't have flushed before enterEditMode
+  // reads `shipId` from the closure.
+  const enterEditMode = useCallback(async ({ pin, role, shipId: shipIdOverride } = {}) => {
+    const targetShipId = shipIdOverride || shipId;
+    if (!targetShipId) throw new Error('No ship selected');
     if (!Object.values(EDITOR_ROLES).includes(role)) throw new Error('Invalid role');
 
     const cfg = await loadAuthConfig();
-    const record = cfg.ships?.[shipId];
+    const record = cfg.ships?.[targetShipId];
     if (!record) return false;
 
     const ok = await verifyPin(pin, record);
     if (!ok) return false;
 
+    // Commit ship selection atomically with the edit session so we never flash
+    // a view-only state between the two. Clear admin token because that was
+    // tied to whatever the prior ship (if any) was.
+    if (targetShipId !== shipId) {
+      setShipId(targetShipId);
+      setAdminToken(null);
+    }
     setEditor(role);
     setEditMode(true);
     return true;

@@ -50,17 +50,11 @@ export function LandingScreen() {
 
     try {
       if (pinFilled) {
-        // Verify PIN BEFORE flipping into the main view, so a bad PIN keeps us
-        // on the landing screen with the inline error visible.
-        // verifyPin needs shipId — pass it via a temporary commit by reading
-        // auth.json directly through enterEditMode after selectShip; but
-        // selectShip would unmount us. Instead, gate by selectShip ONLY on success.
-        selectShip(shipId);
-        const ok = await enterEditMode({ pin, role });
+        // Pass shipId explicitly — enterEditMode verifies the PIN first and
+        // only commits the ship + edit session together on success. A bad PIN
+        // leaves us on the landing screen with the error visible.
+        const ok = await enterEditMode({ pin, role, shipId });
         if (!ok) {
-          // Roll back ship selection so we stay on landing.
-          // (selectShip resets edit/admin too, so nothing leaks.)
-          selectShip(null);
           setError(`Incorrect PIN for ${selectedShip?.displayName || 'this ship'}.`);
         }
       } else {

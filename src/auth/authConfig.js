@@ -84,6 +84,16 @@ export function _resetAuthConfigCache() {
   cachedSource = null;
 }
 
+// Build the seed-only config (canonical mockup PINs from CLAUDE.md §4),
+// bypassing GitHub entirely. Used by the Admin Panel's "Seed PIN" path so
+// that bootstrap works even when the remote auth.json already exists but is
+// missing the target ship — in that case loadAuthConfig({force:true}) would
+// still return the incomplete remote config and the seed record would never
+// surface. This helper guarantees we can always produce the canonical record.
+export async function loadSeedAuthConfig() {
+  return buildSeedConfig();
+}
+
 // Used by AdminPanel / EditModeModal — exported here so consumers don't reach
 // into module internals. Returns null if shipId is unknown.
 export async function getShipPinRecord(shipId) {
