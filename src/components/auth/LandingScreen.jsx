@@ -158,7 +158,7 @@ export function LandingScreen() {
         </button>
 
         <p className="mt-6 text-center text-[0.7rem]" style={{ color: 'var(--color-faint)' }}>
-          Data lives in a private GitHub repository.<br/>
+          Data lives in a public GitHub repository (no PII).<br/>
           Your PC's lock screen is the access boundary.
         </p>
       </div>

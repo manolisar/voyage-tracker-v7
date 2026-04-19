@@ -7,7 +7,7 @@
 
 ## 1. What this app is
 
-A static SPA used by ECR / Chief Engineers to log fuel + lub-oil consumption per cruise leg. Data lives in a **private GitHub repository**; the app reads/writes JSON files via the Contents API. Git history is the audit log.
+A static SPA used by ECR / Chief Engineers to log fuel + lub-oil consumption per cruise leg. Data lives in a **public GitHub repository** (the data is not sensitive — see §4); the app reads/writes JSON files via the Contents API. Reads are anonymous; writes require a GitHub PAT. Git history is the audit log.
 
 **Fleet (all Solstice-class, identical engine/boiler plant):**
 
@@ -29,7 +29,7 @@ A static SPA used by ECR / Chief Engineers to log fuel + lub-oil consumption per
 - **WebCrypto** for PIN hashing (PBKDF2-SHA256, 310k iter)
 - Deployment: GitHub Pages (static)
 
-No backend. No database. No serverless functions. The entire app is a static bundle that talks to one private GitHub data repo.
+No backend. No database. No serverless functions. The entire app is a static bundle that talks to one public GitHub data repo (unauthenticated reads, PAT-authenticated writes).
 
 ---
 
@@ -37,7 +37,9 @@ No backend. No database. No serverless functions. The entire app is a static bun
 
 **Two repos:**
 1. `voyage-tracker-v7` — app code + GitHub Pages deploy.
-2. `voyage-tracker-data` (PRIVATE) — JSON data + auth config.
+2. `voyage-tracker-data` (**PUBLIC**) — JSON data + auth config.
+
+**Why public:** GitHub's Contents API requires authentication for *any* read on a private repo. A private data repo would mean every viewer needs a PAT, contradicting §4's "anonymous View Only." Since the data isn't sensitive (no PII, no financial data — just fuel counters), making the repo public is the cleanest way to deliver truly anonymous reads without introducing a serverless proxy. The `auth.json` file in `data/_config/` contains only PBKDF2 PIN hashes (no PATs, no secrets), so its being publicly readable is acceptable — the PIN is a UI accident-gate, not a secret (see §4).
 
 **Data repo layout:**
 ```
@@ -64,8 +66,9 @@ data/
 The data is **not secret** (it's not PII or financial). The threat we defend against is **accidental edits by someone walking up to an unlocked ECR PC**, not exfiltration.
 
 ### Read access (View Only)
-- No password. The PC's Windows lock screen IS the access boundary.
+- No password, **no PAT**. The PC's Windows lock screen IS the access boundary.
 - Anyone who lands on the URL can browse all 5 ships' voyage data read-only.
+- Anonymous reads work because `voyage-tracker-data` is public (§3). The storage layer issues unauthenticated `GET`s for list/load operations.
 
 ### Edit access (per-ship PIN)
 - 4-digit PIN per ship — **accident prevention, not security**.
@@ -88,6 +91,19 @@ The data is **not secret** (it's not PII or financial). The threat we defend aga
 - **Admin actions:** rotate ship PINs, view recent commits, bootstrap new ships.
 - PAT lifecycle: generated once on github.com (~3 min), reusable until expiry/revocation. Recommend 1-year fine-grained PAT scoped to data repo with `Contents: Read & Write`. Save in password manager.
 - **No separate admin password exists.** Your GitHub account IS the admin credential. Nothing leaks server-side because there is no server.
+
+### What gates what — PAT vs PIN
+
+The PAT and the PIN are **separate, non-overlapping gates**. The PAT controls whether GitHub's API accepts the call at all; the PIN controls whether the UI lets the user flip into Edit Mode. Neither is a substitute for the other.
+
+| Action                        | PAT? | PIN? | Notes |
+|-------------------------------|------|------|-------|
+| View voyages                  | —    | —    | Anonymous GETs on the public data repo. |
+| Edit voyage data (create / save / end) | ✓    | ✓    | PAT so the `PUT` succeeds; PIN so the UI unlocks. |
+| Rotate a ship's PIN           | ✓    | —    | Admin action — PAT *is* the admin credential. |
+| Init data dir / bootstrap ship | ✓    | —    | Admin action. |
+
+The PIN is never a crypto secret and never gates API calls. Anyone with the PAT can write to the repo directly via `curl` — the PIN only exists to stop an idle crew member at an unlocked ECR PC from clicking "Enable Edit" and changing a number. If the PAT is compromised, rotate it on github.com; the PIN rotation is a separate concern aimed at local accident prevention.
 
 ### Canonical seed PINs (mockup demo values)
 | Ship | PIN  |
@@ -288,4 +304,4 @@ Voyage_Tracker_v7/
 
 ---
 
-*Last updated: 2026-04-17. Maintained alongside `mockup/index.html` — they MUST stay in sync.*
+*Last updated: 2026-04-19. Maintained alongside `mockup/index.html` — they MUST stay in sync.*

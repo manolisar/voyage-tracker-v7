@@ -180,7 +180,7 @@ export function AdminPanel({ onClose }) {
             <Settings className="w-5 h-5" />
             <div>
               <h2 id="admin-title">Admin Panel</h2>
-              <p>Connected to private data repo · 4 sections</p>
+              <p>Connected to public data repo · 3 sections</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="p-1 rounded hover:bg-black/5" aria-label="Close">
@@ -260,7 +260,10 @@ export function AdminPanel({ onClose }) {
                         return (
                           <tr key={s.id} style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
                             <Td>{s.displayName}</Td>
-                            <Td mono>{(s.id || '').slice(0, 2).toUpperCase()}</Td>
+                            {/* Canonical 2-letter code lives in ships.json (CLAUDE.md §1: */}
+                            {/* SL/EQ/EC/SI/RF). The id-slice fallback only fires for a hand- */}
+                            {/* added ship without a `code` field — visible bug, not silent wrong. */}
+                            <Td mono>{s.code || (s.id || '').slice(0, 2).toUpperCase()}</Td>
                             <Td>
                               {hasPin
                                 ? <span style={{ color: 'var(--color-text)' }}>● configured</span>

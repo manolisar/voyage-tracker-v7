@@ -57,7 +57,7 @@ function manifestEntryFrom(voyage) {
 function emptySelection() { return null; }
 
 export function VoyageStoreProvider({ children }) {
-  const { shipId } = useAuth();
+  const { shipId, adminToken } = useAuth();
 
   const [voyages, setVoyages] = useState([]);     // manifest entries
   const [loadedById, setLoadedById] = useState({}); // { [filename]: voyageObj }  (last clean snapshot)
@@ -105,6 +105,13 @@ export function VoyageStoreProvider({ children }) {
   useEffect(() => { draftsRef.current = drafts; }, [drafts]);
 
   // Refresh the manifest from the adapter.
+  //
+  // `adminToken` is in the dep array so that when the user pastes a PAT
+  // post-mount, the manifest auto-fetches without a manual Refresh click.
+  // The first mount call (no token yet) throws AuthError → listError is set;
+  // VoyageTree's error suppression hides it because AppShell already shows
+  // the "Connect to data repo" banner. When the token arrives, this re-runs
+  // and the real list lands.
   const refreshList = useCallback(async () => {
     if (!shipId) {
       setVoyages([]);
@@ -120,7 +127,7 @@ export function VoyageStoreProvider({ children }) {
     } finally {
       setListLoading(false);
     }
-  }, [shipId]);
+  }, [shipId, adminToken]);
 
   // Load manifest on mount. The provider is `key`'d on shipId by AppShell, so
   // a ship switch unmounts/remounts this provider with fresh state — no reset

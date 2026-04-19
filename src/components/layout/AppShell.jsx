@@ -94,10 +94,17 @@ export function AppShell() {
 
   // ── Keep the module-level adapter closures in sync with auth state ─────
   // The adapter was installed synchronously at module load (above) so that
-  // first-render listVoyages() doesn't race. These effects just feed it the
-  // live token + role. PAT rotation never rebuilds the adapter.
-  useEffect(() => { currentToken = adminToken; }, [adminToken]);
-  useEffect(() => { currentEditorRole = editor; }, [editor]);
+  // first-render listVoyages() doesn't race. We also push token/role
+  // assignments DURING RENDER (not in a useEffect) because React fires child
+  // effects BEFORE parent effects. If this lived in a useEffect, then on a
+  // PAT-rehydration tick, VoyageStoreProvider (a child) would re-run its
+  // refreshList — keyed off `adminToken` — BEFORE this effect updated
+  // `currentToken`, so the adapter would still see `null` and throw
+  // AuthError. Render-time assignment is safe: these are closure-cache
+  // mutables, not React state, and they end up at the same value either way
+  // under StrictMode's double-render.
+  currentToken      = adminToken;
+  currentEditorRole = editor;
 
   // Re-hydrate a remembered PAT (sessionStorage) on first render.
   useEffect(() => {
@@ -186,7 +193,7 @@ export function AppShell() {
           >
             <Cloud className="w-3.5 h-3.5" />
             <span>
-              Not connected to data repo. <button className="underline font-semibold" onClick={() => { setPatReason('connect'); setPatModalOpen(true); }}>Connect</button> to load voyages.
+              Reading anonymously from the public data repo. <button className="underline font-semibold" onClick={() => { setPatReason('connect'); setPatModalOpen(true); }}>Connect a PAT</button> to enable Edit Mode.
             </span>
           </div>
         )}

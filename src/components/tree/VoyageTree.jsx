@@ -11,9 +11,11 @@ export function VoyageTree() {
   const { shipId } = useAuth();
   const { visibleVoyages, voyages, listLoading, listError } = useVoyageStore();
 
-  // Suppress the redundant "no token" error — the AppShell banner already
-  // tells the user how to connect, no need to scream the same thing twice
-  // inside the tree.
+  // Anonymous GETs land successfully on the public data repo (CLAUDE.md §3),
+  // so a "no token" error during list shouldn't normally occur. We keep the
+  // suppression as a belt-and-braces safety net in case GitHub ever flips an
+  // unauth GET into a 401 (rate-limited IP, repo briefly private, etc.) — the
+  // AppShell banner is still the canonical "connect" prompt.
   const isNoTokenError = listError && /no github token/i.test(listError);
   const showError = listError && !isNoTokenError;
 

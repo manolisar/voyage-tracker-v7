@@ -94,7 +94,12 @@ export async function ghFetch(path, {
 } = {}) {
   if (!getToken) throw new Error('ghFetch: getToken callback is required');
   const token = getToken();
-  if (!token) throw new AuthError('No GitHub token available');
+  // The data repo is PUBLIC (CLAUDE.md §3): anonymous GETs are legitimate and
+  // power the View-Only experience. Writes still need a PAT — fail fast with a
+  // clear message instead of letting GitHub return a generic 401.
+  if (!token && method !== 'GET') {
+    throw new AuthError('No GitHub token available — connect a PAT to write to the data repo.');
+  }
 
   const url = `${API_ROOT}${path}`;
   const init = {
@@ -102,7 +107,9 @@ export async function ghFetch(path, {
     headers: {
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
-      'Authorization': `Bearer ${token}`,
+      // Only attach Authorization when we actually have a token. Sending an
+      // empty Bearer header would itself cause a 401 on a public repo.
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...headers,
     },
