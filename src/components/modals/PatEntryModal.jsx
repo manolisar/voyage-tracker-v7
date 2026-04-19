@@ -17,7 +17,11 @@ import { X } from '../Icons';
 export function PatEntryModal({ onClose, onUnlocked }) {
   const { setAdminPat } = useAuth();
   const [pat, setPat] = useState('');
-  const [remember, setRemember] = useState(false);
+  // Default ON. CLAUDE.md §4 only forbids localStorage by default; sessionStorage
+  // is still tab-scoped (dies when the tab closes) so it's no weaker than
+  // in-memory, but it survives reloads. Surviving reloads is the user's main
+  // pain point — pre-tick to make that the default. Users who care can untick.
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -92,10 +96,12 @@ export function PatEntryModal({ onClose, onUnlocked }) {
               onChange={(e) => setRemember(e.target.checked)}
               disabled={submitting}
             />
-            Remember for this browser tab (sessionStorage)
+            Keep me signed in for this tab
           </label>
           <p className="text-xs" style={{ color: 'var(--color-faint)' }}>
-            Token is held in JS memory only. Closing the tab discards it.
+            {remember
+              ? 'Token survives page reloads in this tab. Closing the tab clears it. Never written to localStorage.'
+              : 'Token lives in memory only — every page reload will ask again.'}
           </p>
 
           {error && (

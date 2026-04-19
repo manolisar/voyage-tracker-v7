@@ -11,6 +11,12 @@ export function VoyageTree() {
   const { shipId } = useAuth();
   const { visibleVoyages, voyages, listLoading, listError } = useVoyageStore();
 
+  // Suppress the redundant "no token" error — the AppShell banner already
+  // tells the user how to connect, no need to scream the same thing twice
+  // inside the tree.
+  const isNoTokenError = listError && /no github token/i.test(listError);
+  const showError = listError && !isNoTokenError;
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <TreeToolbar />
@@ -20,13 +26,19 @@ export function VoyageTree() {
         role="tree"
         aria-label="Voyages"
       >
-        {listError && (
+        {showError && (
           <div
             className="m-2 p-3 rounded-lg text-xs"
             style={{ background: 'var(--color-error-bg)', color: 'var(--color-error-fg)' }}
             role="alert"
           >
             <strong>Failed to load voyages:</strong> {listError}
+          </div>
+        )}
+
+        {isNoTokenError && (
+          <div className="p-6 text-center text-xs" style={{ color: 'var(--color-dim)' }}>
+            Connect to the data repo to load voyages.
           </div>
         )}
 

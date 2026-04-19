@@ -78,6 +78,12 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [patModalOpen, setPatModalOpen] = useState(false);
+  // Why the PAT modal is open. After a successful unlock we route the user to
+  // whichever flow they were trying to start:
+  //   'admin' — they clicked the gear → open Admin Panel.
+  //   'edit'  — they clicked Enable Edit Mode → open EditModeModal.
+  // (Plain 'connect' from the top-of-page banner falls through to nothing.)
+  const [patReason, setPatReason] = useState('connect');
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [newVoyageOpen, setNewVoyageOpen] = useState(false);
   // VoyageDetail opens Add-Leg / End-Voyage modals by setting these to the
@@ -140,15 +146,31 @@ export function AppShell() {
         <TopBar
           ship={ship}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
-          onOpenEditModal={() => setEditModalOpen(true)}
+          onOpenEditModal={() => {
+            // Edit mode without a PAT is a dead end — saves can't reach the
+            // repo. In GitHub mode, gate the PIN modal on having a token:
+            // open the PAT modal first, then chain into EditModeModal on
+            // success (see patModalOpen branch below). In local-adapter dev
+            // mode there's no PAT at all → straight to the PIN modal.
+            if (USE_GITHUB && !adminToken) {
+              setPatReason('edit');
+              setPatModalOpen(true);
+            } else {
+              setEditModalOpen(true);
+            }
+          }}
           onNewVoyage={() => setNewVoyageOpen(true)}
           onOpenAdmin={() => {
             // No PAT yet → ask for one. Otherwise open the real Admin Panel.
             // (When VITE_DATA_REPO is unset entirely we still surface the PAT
             // modal so the user gets a clear "not connected" message instead
             // of a silently broken Admin Panel.)
-            if (!USE_GITHUB || !adminToken) setPatModalOpen(true);
-            else setAdminPanelOpen(true);
+            if (!USE_GITHUB || !adminToken) {
+              setPatReason('admin');
+              setPatModalOpen(true);
+            } else {
+              setAdminPanelOpen(true);
+            }
           }}
         />
 
@@ -164,7 +186,7 @@ export function AppShell() {
           >
             <Cloud className="w-3.5 h-3.5" />
             <span>
-              Not connected to data repo. <button className="underline font-semibold" onClick={() => setPatModalOpen(true)}>Connect</button> to load voyages.
+              Not connected to data repo. <button className="underline font-semibold" onClick={() => { setPatReason('connect'); setPatModalOpen(true); }}>Connect</button> to load voyages.
             </span>
           </div>
         )}
@@ -214,9 +236,11 @@ export function AppShell() {
           <PatEntryModal
             onClose={() => setPatModalOpen(false)}
             onUnlocked={() => {
-              // Once the user successfully connects, jump straight into the
-              // Admin Panel — that's almost always why they clicked the gear.
-              setAdminPanelOpen(true);
+              // Route to whichever flow the user was originally trying to
+              // start. 'connect' (banner) just connects and stops there.
+              if (patReason === 'admin') setAdminPanelOpen(true);
+              else if (patReason === 'edit') setEditModalOpen(true);
+              setPatReason('connect');
             }}
           />
         )}
