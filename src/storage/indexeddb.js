@@ -1,4 +1,4 @@
-// IndexedDB — two stores, one DB.
+// IndexedDB — three stores, one DB.
 //
 //   `drafts`  keyed by `<shipId>/<filename>` — offline fallback for saves
 //             that couldn't reach the network drive. Mirrored from the
@@ -9,11 +9,17 @@
 //             each ship's network folder. Lets us skip the folder-picker
 //             on every tab reload; re-permissioning is a silent call on
 //             Chromium when the same handle is requested on same-origin.
+//
+//   `session` keyed by 'current' — last picked ship + user name + role, so
+//             a tab refresh restores the session without making the user
+//             re-type their name. editMode is NOT persisted — always starts
+//             false on reload (accident-prevention default).
 
 const DB_NAME = 'VoyageTrackerV7';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_DRAFTS = 'drafts';
 const STORE_HANDLES = 'handles';
+const STORE_SESSION = 'session';
 
 let dbPromise = null;
 
@@ -27,12 +33,16 @@ function openDb() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (ev) => {
       const db = req.result;
-      // v1 → v2: `handles` store added. `drafts` keeps its shape.
+      // v1 → v2: `handles` store added.
+      // v2 → v3: `session` store added. `drafts` keeps its shape throughout.
       if (!db.objectStoreNames.contains(STORE_DRAFTS)) {
         db.createObjectStore(STORE_DRAFTS, { keyPath: 'key' });
       }
       if (!db.objectStoreNames.contains(STORE_HANDLES)) {
         db.createObjectStore(STORE_HANDLES, { keyPath: 'shipId' });
+      }
+      if (!db.objectStoreNames.contains(STORE_SESSION)) {
+        db.createObjectStore(STORE_SESSION, { keyPath: 'id' });
       }
       void ev;
     };
@@ -94,18 +104,14 @@ export async function listDraftsForShip(shipId) {
 }
 
 export async function clearAll() {
-  const drafts = await tx(STORE_DRAFTS, 'readwrite');
-  await new Promise((resolve, reject) => {
-    const req = drafts.clear();
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-  const handles = await tx(STORE_HANDLES, 'readwrite');
-  await new Promise((resolve, reject) => {
-    const req = handles.clear();
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  for (const storeName of [STORE_DRAFTS, STORE_HANDLES, STORE_SESSION]) {
+    const store = await tx(storeName, 'readwrite');
+    await new Promise((resolve, reject) => {
+      const req = store.clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
 }
 
 // Best-effort wrapper — never let IDB hiccups break a save.
@@ -161,6 +167,46 @@ export async function listDirHandles() {
       out.push({ shipId: cur.value.shipId, handle: cur.value.handle, updatedAt: cur.value.updatedAt });
       cur.continue();
     };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Session (ship + user name + role) ────────────────────────────────────
+// Single row with id='current'. Restored on app mount so a tab refresh
+// doesn't force re-picking the ship and re-typing the user's name.
+
+const SESSION_ID = 'current';
+
+export async function putSession(session) {
+  const store = await tx(STORE_SESSION, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put({ id: SESSION_ID, ...session, updatedAt: Date.now() });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getSession() {
+  const store = await tx(STORE_SESSION);
+  return new Promise((resolve, reject) => {
+    const req = store.get(SESSION_ID);
+    req.onsuccess = () => {
+      const row = req.result;
+      if (!row) return resolve(null);
+      // Strip internal fields before returning to caller.
+      // eslint-disable-next-line no-unused-vars
+      const { id, updatedAt, ...rest } = row;
+      resolve(rest);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearSession() {
+  const store = await tx(STORE_SESSION, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.delete(SESSION_ID);
+    req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
 }
