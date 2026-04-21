@@ -16,6 +16,18 @@
 //
 // Value contract: parent sees the same "HH:MM" string it always did
 // (e.g. "06:12"), or '' when either part is unset.
+//
+// Why internal state? The first half the user picks emits '' to the
+// parent (combine() returns '' unless BOTH halves are set). If we drove
+// the <select>s straight off `value`, that '' echo would re-render the
+// hour (or minute) dropdown back to "--" instantly — the pick wouldn't
+// stick until the user managed to select both halves within a single
+// render (impossible, since React re-renders after the first onChange).
+// So we hold local state for the two halves and sync it back from
+// `value` when the parent changes externally (file load, filename
+// switch, etc.).
+
+import { useState } from 'react';
 
 const MINUTE_SLOTS = [0, 6, 12, 18, 24, 30, 36, 42, 48, 54];
 const HOUR_SLOTS = Array.from({ length: 24 }, (_, i) => i);
@@ -43,7 +55,34 @@ function combine(hh, mm) {
 }
 
 export function TimePicker6Min({ value, onChange, readOnly = false }) {
-  const [hPart, mPart] = parseParts(value);
+  // Seed local state from the incoming value; sync on external changes.
+  // When the user picks only one half, the parent's value stays '' but
+  // our local half survives — the pick "sticks" visually until the
+  // other half is picked and the parent finally sees a full "HH:MM".
+  //
+  // We compare to `prevValue` during render (React's
+  // "adjusting state on prop change" pattern) instead of useEffect,
+  // because it avoids the double-render cascade and only runs when
+  // `value` actually changes externally (file load, etc.) — not on
+  // our own '' emissions, which arrive as the same string ''.
+  const [hPart, setHPart] = useState(() => parseParts(value)[0]);
+  const [mPart, setMPart] = useState(() => parseParts(value)[1]);
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    const [h, m] = parseParts(value);
+    setHPart(h);
+    setMPart(m);
+  }
+
+  const pickHour = (h) => {
+    setHPart(h);
+    onChange(combine(h, mPart));
+  };
+  const pickMinute = (m) => {
+    setMPart(m);
+    onChange(combine(hPart, m));
+  };
 
   if (readOnly) {
     return (
@@ -72,7 +111,7 @@ export function TimePicker6Min({ value, onChange, readOnly = false }) {
     >
       <select
         value={hPart}
-        onChange={(e) => onChange(combine(e.target.value, mPart))}
+        onChange={(e) => pickHour(e.target.value)}
         aria-label="Hour"
         style={{
           border: 'none',
@@ -93,7 +132,7 @@ export function TimePicker6Min({ value, onChange, readOnly = false }) {
       <span style={{ color: 'var(--color-faint)' }}>:</span>
       <select
         value={mPart}
-        onChange={(e) => onChange(combine(hPart, e.target.value))}
+        onChange={(e) => pickMinute(e.target.value)}
         aria-label="Minute"
         style={{
           border: 'none',
