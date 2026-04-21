@@ -653,9 +653,51 @@ h1, h2, h3, h4, h5, h6, .font-display { font-family: 'Manrope', sans-serif; }
   box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.2);
 }
 
-/* Time-input min width / hide AM-PM */
-input[type="time"] { min-width: 100px; }
+/* Time inputs — 24h, 6-min stepping (step="360" on the element).
+   We hide the AM/PM field, tint the native clock picker icon to match the
+   water-band accent used elsewhere in the Voyage Report, and give the icon
+   a clickable pill so it reads as an affordance rather than a dim glyph. */
+input[type="time"] {
+  min-width: 108px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
 input[type="time"]::-webkit-datetime-edit-ampm-field { display: none; }
+input[type="time"]::-webkit-datetime-edit {
+  padding: 0;
+  color: var(--color-text);
+}
+input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+input[type="time"]::-webkit-datetime-edit-minute-field:focus {
+  background: rgba(2, 132, 199, 0.12);
+  color: var(--color-water);
+  border-radius: 3px;
+  outline: none;
+}
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  /* Recolor the black native glyph toward --color-water (#0284c7). */
+  filter: invert(32%) sepia(95%) saturate(1784%) hue-rotate(178deg)
+          brightness(94%) contrast(101%);
+}
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: rgba(2, 132, 199, 0.12);
+}
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  /* Lighter tint for dark mode so the icon doesn't disappear on deep navy. */
+  filter: invert(72%) sepia(55%) saturate(472%) hue-rotate(161deg)
+          brightness(94%) contrast(92%);
+}
+.dark input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+.dark input[type="time"]::-webkit-datetime-edit-minute-field:focus {
+  background: rgba(56, 189, 248, 0.18);
+  color: var(--color-water-band);
+}
 
 /* Phase card */
 .phase-card { transition: all 0.2s ease; border: 1px solid var(--color-border-subtle); }

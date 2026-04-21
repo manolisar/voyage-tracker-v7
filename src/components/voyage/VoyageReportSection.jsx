@@ -1,5 +1,7 @@
 // VoyageReportSection — Bridge / navigation data per leg.
-// 3 columns: Departure / Sea Passage / Arrival. Avg speed auto-derived.
+// 3 columns: Departure / Sea Passage / Arrival. Time and avg-speed fields
+// are both derived — time falls out of the HH:MM timestamps on each side,
+// avg speed falls out of distance / time.
 // v7 change: time pickers use step="360" (6-min) instead of v6's step="60".
 
 import { useState } from 'react';
@@ -23,28 +25,95 @@ function persistAvg(distance, time) {
   return '';
 }
 
-// Recompute every derived average speed on the voyage report so the stored
-// object is the one of record — the read-only VoyageReportDetail renders
-// `avgSpeed` / `averageSpeed` fields directly without recomputing.
-function withDerivedSpeeds(vr) {
+// Parse "HH:MM" → minutes since midnight, or null if unparseable.
+function parseHHMM(s) {
+  if (!s || typeof s !== 'string') return null;
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  if (!(h >= 0 && h <= 23 && mm >= 0 && mm <= 59)) return null;
+  return h * 60 + mm;
+}
+
+// Same-day HH:MM diff in minutes. If `end` < `start` we assume the range
+// wrapped past midnight (rare for Pier→FA or SBE→Berth but cheap to handle).
+// Returns null when either input is missing/invalid or delta is zero.
+function diffMinutesSameDay(startHHMM, endHHMM) {
+  const a = parseHHMM(startHHMM);
+  const b = parseHHMM(endHHMM);
+  if (a == null || b == null) return null;
+  let mins = b - a;
+  if (mins < 0) mins += 24 * 60;
+  if (mins === 0) return null;
+  return mins;
+}
+
+// Cross-date HH:MM diff in minutes, for total steaming time from FA(dep)
+// on depDate to SBE(arr) on arrDate. Returns null on bad input or
+// non-positive delta.
+function diffMinutesWithDates(startDate, startHHMM, endDate, endHHMM) {
+  if (!startDate || !endDate) return null;
+  const a = parseHHMM(startHHMM);
+  const b = parseHHMM(endHHMM);
+  if (a == null || b == null) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  const startIso = `${startDate}T${pad(Math.floor(a / 60))}:${pad(a % 60)}:00Z`;
+  const endIso   = `${endDate}T${pad(Math.floor(b / 60))}:${pad(b % 60)}:00Z`;
+  const startMs = Date.parse(startIso);
+  const endMs   = Date.parse(endIso);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  if (endMs <= startMs) return null;
+  return Math.round((endMs - startMs) / 60000);
+}
+
+// Minutes → "HH:mm" for display and persistence. The voyage JSON stores
+// elapsed times in this format (crew-facing logbook notation) — avg-speed
+// math converts it back to decimal hours on the fly.
+function formatMinutes(mins) {
+  if (mins == null) return '';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// Minutes → decimal hours (2dp) for avg-speed math. '' when null.
+function minutesToDecimalHours(mins) {
+  if (mins == null) return '';
+  return (mins / 60).toFixed(2);
+}
+
+// Recompute every derived field on the voyage report so the stored object
+// is the one of record — the read-only view renders `time` / `avgSpeed` /
+// `steamingTime` / `averageSpeed` directly without recomputing.
+//
+// Derivation order matters: time depends on timestamps, avg speed depends
+// on (distance, derived time).
+function withDerivedFields(vr, depDate, arrDate) {
+  const pMins = diffMinutesSameDay(vr.departure.sbe, vr.departure.fa);
+  const aMins = diffMinutesSameDay(vr.arrival.sbe, vr.arrival.fwe);
+  const sMins = diffMinutesWithDates(depDate, vr.departure.fa, arrDate, vr.arrival.sbe);
   return {
     ...vr,
     departure: {
       ...vr.departure,
       pierToFA: {
         ...vr.departure.pierToFA,
-        avgSpeed: persistAvg(vr.departure.pierToFA.distance, vr.departure.pierToFA.time),
+        time: formatMinutes(pMins),
+        avgSpeed: persistAvg(vr.departure.pierToFA.distance, minutesToDecimalHours(pMins)),
       },
     },
     voyage: {
       ...vr.voyage,
-      averageSpeed: persistAvg(vr.voyage.totalMiles, vr.voyage.steamingTime),
+      steamingTime: formatMinutes(sMins),
+      averageSpeed: persistAvg(vr.voyage.totalMiles, minutesToDecimalHours(sMins)),
     },
     arrival: {
       ...vr.arrival,
       sbeToBerth: {
         ...vr.arrival.sbeToBerth,
-        avgSpeed: persistAvg(vr.arrival.sbeToBerth.distance, vr.arrival.sbeToBerth.time),
+        time: formatMinutes(aMins),
+        avgSpeed: persistAvg(vr.arrival.sbeToBerth.distance, minutesToDecimalHours(aMins)),
       },
     },
   };
@@ -64,16 +133,23 @@ export function VoyageReportSection({
   const vr = voyageReport;
 
   const updateField  = (section, field, value) =>
-    onChange(withDerivedSpeeds({ ...vr, [section]: { ...vr[section], [field]: value } }));
+    onChange(withDerivedFields({ ...vr, [section]: { ...vr[section], [field]: value } }, depDate, arrDate));
   const updateNested = (section, sub, field, value) =>
-    onChange(withDerivedSpeeds({
+    onChange(withDerivedFields({
       ...vr,
       [section]: { ...vr[section], [sub]: { ...vr[section][sub], [field]: value } },
-    }));
+    }, depDate, arrDate));
 
-  const voyageAvgSpeed   = displayAvg(vr.voyage.totalMiles, vr.voyage.steamingTime);
-  const pierToFASpeed    = displayAvg(vr.departure.pierToFA.distance, vr.departure.pierToFA.time);
-  const sbeToBerthSpeed  = displayAvg(vr.arrival.sbeToBerth.distance, vr.arrival.sbeToBerth.time);
+  // Times are derived from the timestamps; avg speed falls out of those.
+  const pMins = diffMinutesSameDay(vr.departure.sbe, vr.departure.fa);
+  const aMins = diffMinutesSameDay(vr.arrival.sbe, vr.arrival.fwe);
+  const sMins = diffMinutesWithDates(depDate, vr.departure.fa, arrDate, vr.arrival.sbe);
+  const pierToFATime    = formatMinutes(pMins);
+  const sbeToBerthTime  = formatMinutes(aMins);
+  const steamingTime    = formatMinutes(sMins);
+  const pierToFASpeed   = displayAvg(vr.departure.pierToFA.distance, minutesToDecimalHours(pMins));
+  const sbeToBerthSpeed = displayAvg(vr.arrival.sbeToBerth.distance, minutesToDecimalHours(aMins));
+  const voyageAvgSpeed  = displayAvg(vr.voyage.totalMiles, minutesToDecimalHours(sMins));
 
   return (
     <div className="cat-card nav rounded-xl overflow-hidden mb-4">
@@ -153,11 +229,7 @@ export function VoyageReportSection({
                   value={vr.departure.pierToFA.distance} readOnly={readOnly}
                   onChange={(v) => updateNested('departure', 'pierToFA', 'distance', v)}
                 />
-                <Field
-                  label="Time (h)" type="number" step="0.1"
-                  value={vr.departure.pierToFA.time} readOnly={readOnly}
-                  onChange={(v) => updateNested('departure', 'pierToFA', 'time', v)}
-                />
+                <DerivedField label="Time (hh:mm)" value={pierToFATime} />
               </div>
               <div className="vr-calc mono">Avg: {pierToFASpeed} kts</div>
             </div>
@@ -173,11 +245,7 @@ export function VoyageReportSection({
                 />
               </div>
               <div className="vr-field-full">
-                <Field
-                  label="Steaming Time (h)" type="number" step="0.1"
-                  value={vr.voyage.steamingTime} readOnly={readOnly}
-                  onChange={(v) => updateField('voyage', 'steamingTime', v)}
-                />
+                <DerivedField label="Steaming Time (hh:mm)" value={steamingTime} />
               </div>
               <div className="vr-calc mono"
                    style={{ marginTop: '0.5rem', fontSize: '1.1rem', padding: '0.6rem' }}>
@@ -211,11 +279,7 @@ export function VoyageReportSection({
                   value={vr.arrival.sbeToBerth.distance} readOnly={readOnly}
                   onChange={(v) => updateNested('arrival', 'sbeToBerth', 'distance', v)}
                 />
-                <Field
-                  label="Time (h)" type="number" step="0.1"
-                  value={vr.arrival.sbeToBerth.time} readOnly={readOnly}
-                  onChange={(v) => updateNested('arrival', 'sbeToBerth', 'time', v)}
-                />
+                <DerivedField label="Time (hh:mm)" value={sbeToBerthTime} />
               </div>
               <div className="vr-calc mono">Avg: {sbeToBerthSpeed} kts</div>
             </div>
@@ -250,6 +314,39 @@ function Field({ label, type, step, value, onChange, readOnly }) {
           className="form-input font-mono text-[0.78rem]"
         />
       )}
+    </div>
+  );
+}
+
+// DerivedField: a read-only field for values the form computes from other
+// inputs (Time (hh:mm) falls out of the HH:MM timestamps, avg speed out of
+// distance/time). Styled as an input-shaped box with a `calc` badge so it
+// reads as "this was derived, not typed."
+function DerivedField({ label, value }) {
+  return (
+    <div>
+      <label className="form-label flex items-center gap-1.5">
+        {label}
+        <span
+          className="text-[0.5rem] font-bold tracking-wider uppercase px-1 py-px rounded"
+          style={{ background: 'rgba(2,132,199,0.10)', color: 'var(--color-water)' }}
+          title="Derived from timestamps"
+        >
+          auto
+        </span>
+      </label>
+      <div
+        className="form-input font-mono text-[0.78rem]"
+        style={{
+          background: 'rgba(2,132,199,0.04)',
+          borderStyle: 'dashed',
+          borderColor: 'var(--color-water-border)',
+          cursor: 'default',
+          color: value ? 'var(--color-text)' : 'var(--color-faint)',
+        }}
+      >
+        {value || '\u2014'}
+      </div>
     </div>
   );
 }
