@@ -70,6 +70,11 @@ export function defaultLeg(shipClass) {
 export function defaultVoyageReport() {
   return {
     departure: {
+      // `tz` is the IANA zone in which FA/SBE are logged (ship's time is
+      // adjusted to the local port zone). Used to convert to UTC before
+      // computing Steaming Time across a zone change — without it we'd be
+      // off by the offset delta between ports.
+      tz: '',
       sbe: '',
       fa: '',
       pierToFA: { distance: '', time: '', avgSpeed: '' },
@@ -80,6 +85,7 @@ export function defaultVoyageReport() {
       averageSpeed: '',
     },
     arrival: {
+      tz: '',
       sbe: '',
       fwe: '',
       sbeToBerth: { distance: '', time: '', avgSpeed: '' },

@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { ChevronRight, Compass, X } from '../Icons';
+import { TIME_ZONE_GROUPS, tzLabel } from '../../domain/timeZones';
 
 // displayAvg: what to show in the form (em-dash if unknown).
 function displayAvg(distance, time) {
@@ -49,20 +50,58 @@ function diffMinutesSameDay(startHHMM, endHHMM) {
   return mins;
 }
 
-// Cross-date HH:MM diff in minutes, for total steaming time from FA(dep)
-// on depDate to SBE(arr) on arrDate. Returns null on bad input or
-// non-positive delta.
-function diffMinutesWithDates(startDate, startHHMM, endDate, endHHMM) {
+// Convert a local civil time ({YYYY-MM-DD, HH:MM}) in IANA zone `tz` to a
+// UTC millisecond epoch. Works by taking the same wall-clock reading
+// interpreted as UTC, asking Intl what that instant looks like in `tz`,
+// and reading off the offset — then correcting. Loses 1h of precision
+// around DST "fall back" boundaries (where a local time occurs twice);
+// that's acceptable for a ship's log. Returns null on bad input.
+function localToUtcMs(dateStr, hhmm, tz) {
+  const mins = parseHHMM(hhmm);
+  if (mins == null) return null;
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || '');
+  if (!dm) return null;
+  const y = Number(dm[1]); const mo = Number(dm[2]); const d = Number(dm[3]);
+  const h = Math.floor(mins / 60); const mi = mins % 60;
+  // Initial guess: treat the local components as if they were UTC.
+  const guessUtc = Date.UTC(y, mo - 1, d, h, mi);
+  if (!Number.isFinite(guessUtc)) return null;
+  // No tz → caller wants naive math. Return the guess (same-clock diff).
+  if (!tz) return guessUtc;
+  // Ask Intl: at this UTC instant, what wall-clock time does `tz` show?
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date(guessUtc));
+  } catch {
+    // Invalid tz id — fall back to naive.
+    return guessUtc;
+  }
+  const p = {};
+  for (const it of parts) p[it.type] = it.value;
+  // Reconstruct "local civil time at guessUtc in tz" as if it were UTC.
+  const asUtc = Date.UTC(
+    Number(p.year), Number(p.month) - 1, Number(p.day),
+    Number(p.hour) % 24, Number(p.minute), Number(p.second),
+  );
+  const offsetMs = asUtc - guessUtc; // positive east of UTC
+  // Actual UTC = the wall-clock-as-UTC minus the zone's offset.
+  return guessUtc - offsetMs;
+}
+
+// Cross-date, cross-zone HH:MM diff for total steaming time from FA(dep)
+// at `depDate` in `depTz`, to SBE(arr) at `arrDate` in `arrTz`. Either tz
+// can be '' — the helper treats a missing zone as "same clock as the
+// other side" (naive math). Returns null on bad input or non-positive delta.
+function diffMinutesLocal(startDate, startHHMM, startTz, endDate, endHHMM, endTz) {
   if (!startDate || !endDate) return null;
-  const a = parseHHMM(startHHMM);
-  const b = parseHHMM(endHHMM);
-  if (a == null || b == null) return null;
-  const pad = (n) => String(n).padStart(2, '0');
-  const startIso = `${startDate}T${pad(Math.floor(a / 60))}:${pad(a % 60)}:00Z`;
-  const endIso   = `${endDate}T${pad(Math.floor(b / 60))}:${pad(b % 60)}:00Z`;
-  const startMs = Date.parse(startIso);
-  const endMs   = Date.parse(endIso);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  const startMs = localToUtcMs(startDate, startHHMM, startTz);
+  const endMs   = localToUtcMs(endDate,   endHHMM,   endTz);
+  if (startMs == null || endMs == null) return null;
   if (endMs <= startMs) return null;
   return Math.round((endMs - startMs) / 60000);
 }
@@ -92,7 +131,10 @@ function minutesToDecimalHours(mins) {
 function withDerivedFields(vr, depDate, arrDate) {
   const pMins = diffMinutesSameDay(vr.departure.sbe, vr.departure.fa);
   const aMins = diffMinutesSameDay(vr.arrival.sbe, vr.arrival.fwe);
-  const sMins = diffMinutesWithDates(depDate, vr.departure.fa, arrDate, vr.arrival.sbe);
+  const sMins = diffMinutesLocal(
+    depDate, vr.departure.fa,  vr.departure.tz,
+    arrDate, vr.arrival.sbe,   vr.arrival.tz,
+  );
   return {
     ...vr,
     departure: {
@@ -143,7 +185,15 @@ export function VoyageReportSection({
   // Times are derived from the timestamps; avg speed falls out of those.
   const pMins = diffMinutesSameDay(vr.departure.sbe, vr.departure.fa);
   const aMins = diffMinutesSameDay(vr.arrival.sbe, vr.arrival.fwe);
-  const sMins = diffMinutesWithDates(depDate, vr.departure.fa, arrDate, vr.arrival.sbe);
+  const sMins = diffMinutesLocal(
+    depDate, vr.departure.fa,  vr.departure.tz,
+    arrDate, vr.arrival.sbe,   vr.arrival.tz,
+  );
+  // "Zone assumption" — when either tz is missing, or they're the same,
+  // the cross-port math collapses to naive subtraction. We surface this
+  // on the Steaming Time field so the crew knows which math is running.
+  const steamingSameZone = !vr.departure.tz || !vr.arrival.tz ||
+    vr.departure.tz === vr.arrival.tz;
   const pierToFATime    = formatMinutes(pMins);
   const sbeToBerthTime  = formatMinutes(aMins);
   const steamingTime    = formatMinutes(sMins);
@@ -210,6 +260,12 @@ export function VoyageReportSection({
             {/* DEPARTURE */}
             <div className="vr-col">
               <div className="vr-col-head">Departure</div>
+              <TzField
+                label="Port Zone"
+                value={vr.departure.tz}
+                readOnly={readOnly}
+                onChange={(v) => updateField('departure', 'tz', v)}
+              />
               <div className="vr-field">
                 <Field
                   label="SBE" type="time" step="360"
@@ -245,7 +301,15 @@ export function VoyageReportSection({
                 />
               </div>
               <div className="vr-field-full">
-                <DerivedField label="Steaming Time (hh:mm)" value={steamingTime} />
+                <DerivedField
+                  label="Steaming Time (hh:mm)"
+                  value={steamingTime}
+                  hint={steamingSameZone
+                    ? (vr.departure.tz && vr.arrival.tz
+                        ? 'Both zones equal — naive diff'
+                        : 'Set port zones above for cross-zone math')
+                    : `${tzLabel(vr.departure.tz)} \u2192 ${tzLabel(vr.arrival.tz)}`}
+                />
               </div>
               <div className="vr-calc mono"
                    style={{ marginTop: '0.5rem', fontSize: '1.1rem', padding: '0.6rem' }}>
@@ -260,6 +324,12 @@ export function VoyageReportSection({
             {/* ARRIVAL */}
             <div className="vr-col">
               <div className="vr-col-head">Arrival</div>
+              <TzField
+                label="Port Zone"
+                value={vr.arrival.tz}
+                readOnly={readOnly}
+                onChange={(v) => updateField('arrival', 'tz', v)}
+              />
               <div className="vr-field">
                 <Field
                   label="SBE" type="time" step="360"
@@ -321,8 +391,10 @@ function Field({ label, type, step, value, onChange, readOnly }) {
 // DerivedField: a read-only field for values the form computes from other
 // inputs (Time (hh:mm) falls out of the HH:MM timestamps, avg speed out of
 // distance/time). Styled as an input-shaped box with a `calc` badge so it
-// reads as "this was derived, not typed."
-function DerivedField({ label, value }) {
+// reads as "this was derived, not typed." Optional `hint` renders as a
+// small caption below the field — used by Steaming Time to show which
+// zone pair the math ran across, or to nudge the user to set them.
+function DerivedField({ label, value, hint }) {
   return (
     <div>
       <label className="form-label flex items-center gap-1.5">
@@ -347,6 +419,54 @@ function DerivedField({ label, value }) {
       >
         {value || '\u2014'}
       </div>
+      {hint && (
+        <div
+          className="text-[0.6rem] mt-1 font-medium"
+          style={{ color: 'var(--color-faint)', letterSpacing: '0.02em' }}
+        >
+          {hint}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// TzField: IANA zone dropdown, grouped by region. Storing the IANA id as
+// the <option value> keeps Intl.DateTimeFormat happy downstream; the
+// curated labels in TIME_ZONE_GROUPS make the list scannable.
+// In read-only mode, renders the friendly label (or "\u2014" when unset).
+function TzField({ label, value, onChange, readOnly }) {
+  if (readOnly) {
+    return (
+      <div style={{ marginBottom: '0.6rem' }}>
+        <label className="form-label">{label}</label>
+        <div
+          className="form-input text-[0.78rem]"
+          style={{ background: 'transparent', border: '1px solid transparent', cursor: 'default' }}
+        >
+          {value ? tzLabel(value) : '\u2014'}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginBottom: '0.6rem' }}>
+      <label className="form-label">{label}</label>
+      <select
+        value={value || ''}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => onChange(e.target.value)}
+        className="form-input text-[0.78rem]"
+      >
+        <option value="">{'\u2014 Select zone \u2014'}</option>
+        {TIME_ZONE_GROUPS.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.zones.map((z) => (
+              <option key={z.id} value={z.id}>{z.label}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
     </div>
   );
 }
