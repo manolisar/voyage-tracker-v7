@@ -58,6 +58,7 @@ export function VoyageReportSection({
   arrPort,
   depDate,
   arrDate,
+  readOnly = false,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const vr = voyageReport;
@@ -103,7 +104,7 @@ export function VoyageReportSection({
           {vr.voyage.totalMiles && (
             <span className="total-pill mono text-[0.75rem]">{vr.voyage.totalMiles} nm</span>
           )}
-          {onDelete && (
+          {!readOnly && onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               className="p-1.5 rounded-lg transition-colors"
@@ -134,37 +135,29 @@ export function VoyageReportSection({
             <div className="vr-col">
               <div className="vr-col-head">Departure</div>
               <div className="vr-field">
-                <div>
-                  <label className="form-label">SBE</label>
-                  <input type="time" step="360" value={vr.departure.sbe}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateField('departure', 'sbe', e.target.value)}
-                    className="form-input font-mono text-[0.78rem]" />
-                </div>
-                <div>
-                  <label className="form-label">FA (Full Away)</label>
-                  <input type="time" step="360" value={vr.departure.fa}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateField('departure', 'fa', e.target.value)}
-                    className="form-input font-mono text-[0.78rem]" />
-                </div>
+                <Field
+                  label="SBE" type="time" step="360"
+                  value={vr.departure.sbe} readOnly={readOnly}
+                  onChange={(v) => updateField('departure', 'sbe', v)}
+                />
+                <Field
+                  label="FA (Full Away)" type="time" step="360"
+                  value={vr.departure.fa} readOnly={readOnly}
+                  onChange={(v) => updateField('departure', 'fa', v)}
+                />
               </div>
               <div className="vr-sub-head">Pier {'\u2192'} FA</div>
               <div className="vr-field">
-                <div>
-                  <label className="form-label">Dist (nm)</label>
-                  <input type="number" step="0.1" value={vr.departure.pierToFA.distance}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateNested('departure', 'pierToFA', 'distance', e.target.value)}
-                    className="form-input font-mono text-[0.78rem]" />
-                </div>
-                <div>
-                  <label className="form-label">Time (h)</label>
-                  <input type="number" step="0.1" value={vr.departure.pierToFA.time}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateNested('departure', 'pierToFA', 'time', e.target.value)}
-                    className="form-input font-mono text-[0.78rem]" />
-                </div>
+                <Field
+                  label="Dist (nm)" type="number" step="0.1"
+                  value={vr.departure.pierToFA.distance} readOnly={readOnly}
+                  onChange={(v) => updateNested('departure', 'pierToFA', 'distance', v)}
+                />
+                <Field
+                  label="Time (h)" type="number" step="0.1"
+                  value={vr.departure.pierToFA.time} readOnly={readOnly}
+                  onChange={(v) => updateNested('departure', 'pierToFA', 'time', v)}
+                />
               </div>
               <div className="vr-calc mono">Avg: {pierToFASpeed} kts</div>
             </div>
@@ -173,18 +166,18 @@ export function VoyageReportSection({
             <div className="vr-col">
               <div className="vr-col-head">Sea Passage (FA {'\u2192'} SBE)</div>
               <div className="vr-field-full">
-                <label className="form-label">Total Miles</label>
-                <input type="number" step="0.1" value={vr.voyage.totalMiles}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => updateField('voyage', 'totalMiles', e.target.value)}
-                  className="form-input font-mono text-[0.78rem]" />
+                <Field
+                  label="Total Miles" type="number" step="0.1"
+                  value={vr.voyage.totalMiles} readOnly={readOnly}
+                  onChange={(v) => updateField('voyage', 'totalMiles', v)}
+                />
               </div>
               <div className="vr-field-full">
-                <label className="form-label">Steaming Time (h)</label>
-                <input type="number" step="0.1" value={vr.voyage.steamingTime}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => updateField('voyage', 'steamingTime', e.target.value)}
-                  className="form-input font-mono text-[0.78rem]" />
+                <Field
+                  label="Steaming Time (h)" type="number" step="0.1"
+                  value={vr.voyage.steamingTime} readOnly={readOnly}
+                  onChange={(v) => updateField('voyage', 'steamingTime', v)}
+                />
               </div>
               <div className="vr-calc mono"
                    style={{ marginTop: '0.5rem', fontSize: '1.1rem', padding: '0.6rem' }}>
@@ -200,42 +193,62 @@ export function VoyageReportSection({
             <div className="vr-col">
               <div className="vr-col-head">Arrival</div>
               <div className="vr-field">
-                <div>
-                  <label className="form-label">SBE</label>
-                  <input type="time" step="360" value={vr.arrival.sbe}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateField('arrival', 'sbe', e.target.value)}
-                    className="form-input font-mono text-[0.78rem]" />
-                </div>
-                <div>
-                  <label className="form-label">FWE</label>
-                  <input type="time" step="360" value={vr.arrival.fwe}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateField('arrival', 'fwe', e.target.value)}
-                    className="form-input font-mono text-[0.78rem]" />
-                </div>
+                <Field
+                  label="SBE" type="time" step="360"
+                  value={vr.arrival.sbe} readOnly={readOnly}
+                  onChange={(v) => updateField('arrival', 'sbe', v)}
+                />
+                <Field
+                  label="FWE" type="time" step="360"
+                  value={vr.arrival.fwe} readOnly={readOnly}
+                  onChange={(v) => updateField('arrival', 'fwe', v)}
+                />
               </div>
               <div className="vr-sub-head">SBE {'\u2192'} Berth</div>
               <div className="vr-field">
-                <div>
-                  <label className="form-label">Dist (nm)</label>
-                  <input type="number" step="0.1" value={vr.arrival.sbeToBerth.distance}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateNested('arrival', 'sbeToBerth', 'distance', e.target.value)}
-                    className="form-input font-mono text-[0.78rem]" />
-                </div>
-                <div>
-                  <label className="form-label">Time (h)</label>
-                  <input type="number" step="0.1" value={vr.arrival.sbeToBerth.time}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => updateNested('arrival', 'sbeToBerth', 'time', e.target.value)}
-                    className="form-input font-mono text-[0.78rem]" />
-                </div>
+                <Field
+                  label="Dist (nm)" type="number" step="0.1"
+                  value={vr.arrival.sbeToBerth.distance} readOnly={readOnly}
+                  onChange={(v) => updateNested('arrival', 'sbeToBerth', 'distance', v)}
+                />
+                <Field
+                  label="Time (h)" type="number" step="0.1"
+                  value={vr.arrival.sbeToBerth.time} readOnly={readOnly}
+                  onChange={(v) => updateNested('arrival', 'sbeToBerth', 'time', v)}
+                />
               </div>
               <div className="vr-calc mono">Avg: {sbeToBerthSpeed} kts</div>
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Unified field renderer: real `<input>` in edit mode, a static div that
+// matches the input's dimensions in read-only mode. Keeps view and edit
+// visually aligned so toggling Edit Mode doesn't reflow the card.
+function Field({ label, type, step, value, onChange, readOnly }) {
+  return (
+    <div>
+      <label className="form-label">{label}</label>
+      {readOnly ? (
+        <div
+          className="form-input font-mono text-[0.78rem]"
+          style={{ background: 'transparent', border: '1px solid transparent', cursor: 'default' }}
+        >
+          {value || '\u2014'}
+        </div>
+      ) : (
+        <input
+          type={type}
+          step={step}
+          value={value}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onChange(e.target.value)}
+          className="form-input font-mono text-[0.78rem]"
+        />
       )}
     </div>
   );

@@ -2,6 +2,7 @@
 // Lub-oil is recorded ONLY here per the spec, never in dep/arrival reports.
 
 import { formatMT } from '../../domain/calculations';
+import { voyageRouteLongLabel } from '../../domain/factories';
 
 export function VoyageEndDetail({ voyage }) {
   const end = voyage.voyageEnd;
@@ -24,7 +25,7 @@ export function VoyageEndDetail({ voyage }) {
             ⚑ Voyage End
           </span>
           <div className="text-[1.05rem] font-extrabold" style={{ color: 'var(--color-text)' }}>
-            {voyage.name}
+            {voyageRouteLongLabel(voyage)}
           </div>
           <div className="flex-1" />
           {end.completedAt && (

@@ -1,6 +1,6 @@
 // CRUD against a per-ship network folder via the File System Access API.
-// Contract matches the github adapter (src/storage/github/contents.js) so
-// the rest of the app doesn't care which backend is wired.
+// Implements the storage adapter contract defined in ../adapter.js so the
+// rest of the app depends on the interface, not the backend.
 //
 // Concurrency semantics: mtime-based stale-file check on saveVoyage. The
 // caller passes the mtime it remembered at load time; if the on-disk mtime
@@ -80,6 +80,7 @@ export async function listVoyages(shipId) {
     entries.push({ name, handle });
   }
 
+  const emptyPort = { code: '', name: '', country: '', locode: '' };
   const manifest = [];
   for (const { name, handle } of entries) {
     try {
@@ -87,10 +88,11 @@ export async function listVoyages(shipId) {
       manifest.push({
         filename: name,
         id: voyage?.id ?? name,
-        name: voyage?.name ?? name.replace(/\.json$/, ''),
+        fromPort: voyage?.fromPort ?? emptyPort,
+        toPort:   voyage?.toPort   ?? emptyPort,
         startDate: voyage?.startDate ?? '',
         endDate: voyage?.endDate ?? '',
-        ended: Boolean(voyage?.ended),
+        ended: !!voyage?.voyageEnd,
       });
     } catch (e) {
       // A single corrupt file shouldn't kill the manifest. Surface it with
@@ -98,7 +100,9 @@ export async function listVoyages(shipId) {
       // will re-surface when the user tries to open it.
       console.warn(`[local/voyages] Failed to parse ${name}:`, e);
       manifest.push({
-        filename: name, id: name, name, startDate: '', endDate: '', ended: false,
+        filename: name, id: name,
+        fromPort: emptyPort, toPort: emptyPort,
+        startDate: '', endDate: '', ended: false,
       });
     }
   }
@@ -137,8 +141,23 @@ export async function saveVoyage(shipId, filename, voyage, prevMtime = null) {
   const dir = await getHandleForShip(shipId);
 
   const existing = await tryGetFileHandle(dir, filename);
-  if (existing && prevMtime != null) {
+  if (existing) {
     const f = await existing.getFile();
+    if (prevMtime == null) {
+      // Caller thinks this is a brand-new file, but a file with this name is
+      // already on disk — refuse to silently clobber it. Surface as a stale-
+      // file conflict so the UI can offer Reload / Overwrite / Cancel.
+      let currentVoyage = null;
+      try { currentVoyage = JSON.parse(await f.text()); } catch { /* ignore parse */ }
+      throw new StaleFileError(
+        `File already exists: ${filename}`,
+        {
+          loadedMtime: null,
+          currentMtime: f.lastModified,
+          currentVoyage,
+        },
+      );
+    }
     if (f.lastModified > prevMtime) {
       let currentVoyage = null;
       try { currentVoyage = JSON.parse(await f.text()); } catch { /* ignore parse */ }

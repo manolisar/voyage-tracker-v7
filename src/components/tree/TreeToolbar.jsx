@@ -24,11 +24,12 @@ export function TreeToolbar() {
       <div className="relative mb-2">
         <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-faint)' }} />
         <input
+          id="tree-search"
           type="text"
           placeholder="Search voyages…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="form-input text-xs pl-7 pr-2 py-1.5"
+          className="form-input text-xs !pl-7 !pr-2 !py-1.5"
           aria-label="Search voyages"
         />
       </div>

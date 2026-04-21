@@ -1,17 +1,18 @@
 // NewVoyageModal — opens from the top bar "+ New Voyage" button (edit mode).
-// Collects: voyage name + start date (+ optional end date). The actual file
-// write goes through VoyageStore.createVoyage, which stamps a filename built
-// from the date + slugified name and upserts _index.json.
-//
-// Source of truth for copy + layout: mockup/index.html → renderNewVoyageModal.
+// Collects: embarkation + disembarkation ports (via PortCombobox against the
+// UN/LOCODE catalog) + start date (+ optional end date). The actual file
+// write goes through VoyageStore.createVoyage, which stamps a filename of
+// the form <SHIP_CODE>_<startDate>_<fromPort>-<toPort>.json.
 
 import { useEffect, useState } from 'react';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
+import { PortCombobox } from '../ui/PortCombobox';
 import { X } from '../Icons';
 
-export function NewVoyageModal({ shipClass, onClose }) {
+export function NewVoyageModal({ ship, shipClass, onClose }) {
   const { createVoyage } = useVoyageStore();
-  const [name, setName]           = useState('');
+  const [fromPort, setFromPort] = useState(null);
+  const [toPort,   setToPort]   = useState(null);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate]     = useState('');
   const [busy, setBusy] = useState(false);
@@ -23,7 +24,7 @@ export function NewVoyageModal({ shipClass, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, busy]);
 
-  const canSubmit = !!name.trim() && !!startDate && !busy && !!shipClass;
+  const canSubmit = !!fromPort?.code && !!toPort?.code && !!startDate && !busy && !!shipClass && !!ship?.code;
 
   async function handleCreate(e) {
     e?.preventDefault?.();
@@ -31,7 +32,14 @@ export function NewVoyageModal({ shipClass, onClose }) {
     setBusy(true);
     setError(null);
     try {
-      await createVoyage({ shipClass, name: name.trim(), startDate, endDate });
+      await createVoyage({
+        shipClass,
+        shipCode: ship.code,
+        fromPort,
+        toPort,
+        startDate,
+        endDate,
+      });
       onClose();
     } catch (err) {
       console.error('[NewVoyageModal] create failed', err);
@@ -64,15 +72,22 @@ export function NewVoyageModal({ shipClass, onClose }) {
         </div>
 
         <form className="p-5 grid grid-cols-2 gap-4" onSubmit={handleCreate}>
-          <div className="col-span-2">
-            <div className="form-label">Voyage name</div>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="e.g. Yokohama → Vancouver"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+          <div>
+            <PortCombobox
+              id="embark-port"
+              label="Embarkation port"
+              value={fromPort}
+              onChange={setFromPort}
+              disabled={busy}
               autoFocus
+            />
+          </div>
+          <div>
+            <PortCombobox
+              id="disembark-port"
+              label="Disembarkation port"
+              value={toPort}
+              onChange={setToPort}
               disabled={busy}
             />
           </div>

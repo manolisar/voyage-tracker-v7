@@ -1,6 +1,5 @@
-// Local-filesystem storage adapter — implements the same shape as the
-// github adapter (see ../adapter.js for the contract + ../github/index.js
-// for the reference implementation we're replacing).
+// Local-filesystem storage adapter — implements the contract in ../adapter.js
+// against a per-ship network folder picked via the File System Access API.
 //
 // Construction:
 //
@@ -12,13 +11,10 @@
 // `getSession` is an accessor (not a value) so the adapter always sees the
 // freshest session without needing to be rebuilt when the user changes.
 //
-// Differences from the github adapter (by design):
-//   - `saveVoyage(shipId, filename, voyage, prevMtime?)` uses an mtime instead
-//     of a SHA for stale-file detection. The caller tracks what mtime it saw
-//     at load time and passes it back on save.
-//   - Return shape is `{ mtime }` instead of `{ sha }`.
-//   - No `admin` sub-object — there are no admin-only ops on local storage.
-//     Settings panel calls fsHandle + exportImport directly.
+// Stale-file detection uses `file.lastModified` (mtime) rather than a hash:
+// `saveVoyage(shipId, filename, voyage, prevMtime?)` throws `StaleFileError`
+// if the on-disk mtime is newer than the `prevMtime` the caller remembered at
+// load time. Return shape is `{ mtime }`.
 
 import {
   listVoyages,

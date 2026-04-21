@@ -1,25 +1,36 @@
-// IndexedDB — three stores, one DB.
+// IndexedDB — four stores, one DB.
 //
-//   `drafts`  keyed by `<shipId>/<filename>` — offline fallback for saves
-//             that couldn't reach the network drive. Mirrored from the
-//             in-memory draft map in VoyageStoreProvider; re-hydrated on
-//             startup and flushed on the next successful save.
+//   `drafts`      keyed by `<shipId>/<filename>` — offline fallback for saves
+//                 that couldn't reach the network drive. Mirrored from the
+//                 in-memory draft map in VoyageStoreProvider; re-hydrated on
+//                 startup and flushed on the next successful save.
 //
-//   `handles` keyed by shipId — persisted FileSystemDirectoryHandle for
-//             each ship's network folder. Lets us skip the folder-picker
-//             on every tab reload; re-permissioning is a silent call on
-//             Chromium when the same handle is requested on same-origin.
+//   `handles`     keyed by shipId — persisted FileSystemDirectoryHandle for
+//                 each ship's network folder. Lets us skip the folder-picker
+//                 on every tab reload; re-permissioning is a silent call on
+//                 Chromium when the same handle is requested on same-origin.
 //
-//   `session` keyed by 'current' — last picked ship + user name + role, so
-//             a tab refresh restores the session without making the user
-//             re-type their name. editMode is NOT persisted — always starts
-//             false on reload (accident-prevention default).
+//   `session`     keyed by 'current' — last picked ship + user name + role, so
+//                 a tab refresh restores the session without making the user
+//                 re-type their name. editMode is NOT persisted — always starts
+//                 false on reload (accident-prevention default).
+//
+//   `customPorts` keyed by shipId — ports typed into the New Voyage modal
+//                 that weren't in the shipped UN/LOCODE catalog. Lets the
+//                 autocomplete remember obscure ports across sessions without
+//                 requiring a catalog rebuild + redeploy.
+//
+//   `shipSettings` keyed by shipId — per-ship overrides the crew can tweak
+//                 from Settings (currently: default fuel densities). Applied
+//                 at voyage creation on top of the shipClass baseline.
 
 const DB_NAME = 'VoyageTrackerV7';
-const DB_VERSION = 3;
+const DB_VERSION = 5;
 const STORE_DRAFTS = 'drafts';
 const STORE_HANDLES = 'handles';
 const STORE_SESSION = 'session';
+const STORE_CUSTOM_PORTS = 'customPorts';
+const STORE_SHIP_SETTINGS = 'shipSettings';
 
 let dbPromise = null;
 
@@ -35,6 +46,8 @@ function openDb() {
       const db = req.result;
       // v1 → v2: `handles` store added.
       // v2 → v3: `session` store added. `drafts` keeps its shape throughout.
+      // v3 → v4: `customPorts` store added.
+      // v4 → v5: `shipSettings` store added (per-ship density overrides).
       if (!db.objectStoreNames.contains(STORE_DRAFTS)) {
         db.createObjectStore(STORE_DRAFTS, { keyPath: 'key' });
       }
@@ -43,6 +56,12 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains(STORE_SESSION)) {
         db.createObjectStore(STORE_SESSION, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(STORE_CUSTOM_PORTS)) {
+        db.createObjectStore(STORE_CUSTOM_PORTS, { keyPath: 'shipId' });
+      }
+      if (!db.objectStoreNames.contains(STORE_SHIP_SETTINGS)) {
+        db.createObjectStore(STORE_SHIP_SETTINGS, { keyPath: 'shipId' });
       }
       void ev;
     };
@@ -104,7 +123,7 @@ export async function listDraftsForShip(shipId) {
 }
 
 export async function clearAll() {
-  for (const storeName of [STORE_DRAFTS, STORE_HANDLES, STORE_SESSION]) {
+  for (const storeName of [STORE_DRAFTS, STORE_HANDLES, STORE_SESSION, STORE_CUSTOM_PORTS, STORE_SHIP_SETTINGS]) {
     const store = await tx(storeName, 'readwrite');
     await new Promise((resolve, reject) => {
       const req = store.clear();
@@ -206,6 +225,67 @@ export async function clearSession() {
   const store = await tx(STORE_SESSION, 'readwrite');
   return new Promise((resolve, reject) => {
     const req = store.delete(SESSION_ID);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Custom ports (per-ship user additions outside the shipped catalog) ───
+
+export async function getCustomPorts(shipId) {
+  if (!shipId) return [];
+  const store = await tx(STORE_CUSTOM_PORTS);
+  return new Promise((resolve, reject) => {
+    const req = store.get(shipId);
+    req.onsuccess = () => resolve(req.result?.ports || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function addCustomPort(shipId, port) {
+  if (!shipId || !port?.code) return;
+  const existing = await getCustomPorts(shipId);
+  const upper = port.code.toUpperCase();
+  // De-dup by code; newer wins on conflict.
+  const next = [
+    ...existing.filter((p) => p.code !== upper),
+    { code: upper, name: port.name || '', country: (port.country || '').toUpperCase(), locode: port.locode || '' },
+  ];
+  const store = await tx(STORE_CUSTOM_PORTS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put({ shipId, ports: next, updatedAt: Date.now() });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Ship settings (per-ship overrides edited from Settings) ──────────────
+
+export async function getShipSettings(shipId) {
+  if (!shipId) return {};
+  const store = await tx(STORE_SHIP_SETTINGS);
+  return new Promise((resolve, reject) => {
+    const req = store.get(shipId);
+    req.onsuccess = () => {
+      const row = req.result;
+      if (!row) return resolve({});
+      const { shipId: _s, updatedAt: _u, ...rest } = row;
+      void _s; void _u;
+      resolve(rest);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Shallow-merges `patch` onto the existing settings row so callers can
+// update one field at a time without round-tripping the whole object.
+export async function putShipSettings(shipId, patch) {
+  if (!shipId) return;
+  const current = await getShipSettings(shipId);
+  const next = { ...current, ...patch };
+  const store = await tx(STORE_SHIP_SETTINGS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put({ shipId, ...next, updatedAt: Date.now() });
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });

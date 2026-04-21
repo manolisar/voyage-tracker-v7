@@ -66,19 +66,3 @@ export function calcPhaseTotals(phase, densities) {
   return out;
 }
 
-// File naming for storage: <YYYY-MM-DD>_<route>.json
-// Stable: assigned at voyage creation, never regenerated during edits.
-export function generateFilename(voyage) {
-  if (voyage.filename) return voyage.filename;
-
-  const date = voyage.startDate || new Date().toISOString().split('T')[0];
-  const route = (voyage.name && voyage.name.trim())
-    ? voyage.name.trim().replace(/[^A-Za-z0-9_-]/g, '_')
-    : `voyage_${voyage.id}`;
-  return `${date}_${route}.json`;
-}
-
-// Build the storage path used by the GitHub layer: data/<shipId>/<filename>
-export function voyagePath(voyage) {
-  return `data/${voyage.shipId}/${generateFilename(voyage)}`;
-}

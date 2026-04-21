@@ -14,7 +14,7 @@ import { PhaseSection } from './PhaseSection';
 
 const FUELS = ['hfo', 'mgo', 'lsfo'];
 
-export function ReportForm({ report, onChange, densities, shipClass }) {
+export function ReportForm({ report, onChange, densities, shipClass, readOnly = false }) {
   const [collapsed, setCollapsed] = useState(false);
   const toast = useToast();
 
@@ -81,14 +81,14 @@ export function ReportForm({ report, onChange, densities, shipClass }) {
             <ChevronRight className="w-4 h-4" />
           </span>
           <div>
-            <h3 className="text-[0.88rem] font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            <h2 className="text-[0.88rem] font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
               <span style={{ color: isDeparture ? 'var(--color-ocean-500)' : 'var(--color-mgo)' }}>
                 {isDeparture ? '\uD83D\uDEA2' : '\u2693'}
               </span>
               <span>{isDeparture ? 'Departure' : 'Arrival'}</span>
               <span style={{ color: 'var(--color-faint)' }}>{'\u2013'}</span>
               <span>{report.port || 'No port'}</span>
-            </h3>
+            </h2>
             {collapsed && (
               <p className="text-[0.65rem] mt-0.5 font-mono" style={{ color: 'var(--color-dim)' }}>
                 {report.date || 'No date'} {'\u2022'} {report.phases.length} phases
@@ -105,48 +105,72 @@ export function ReportForm({ report, onChange, densities, shipClass }) {
           <div className="grid grid-cols-4 gap-4 mb-6">
             <div>
               <label className="form-label">Date</label>
-              <input type="date" value={report.date}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => onChange({ ...report, date: e.target.value })}
-                className="form-input font-mono" />
+              {readOnly ? (
+                <ReadOnlyField value={report.date} mono />
+              ) : (
+                <input type="date" value={report.date}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onChange({ ...report, date: e.target.value })}
+                  className="form-input font-mono" />
+              )}
             </div>
             <div>
               <label className="form-label">Port</label>
-              <input type="text" value={report.port}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => onChange({ ...report, port: e.target.value })}
-                className="form-input" placeholder="Singapore" />
+              {readOnly ? (
+                <ReadOnlyField value={report.port} />
+              ) : (
+                <input type="text" value={report.port}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onChange({ ...report, port: e.target.value })}
+                  className="form-input" placeholder="Singapore" />
+              )}
             </div>
             <div>
               <label className="form-label">Engineer</label>
-              <input type="text" value={report.engineer}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => onChange({ ...report, engineer: e.target.value })}
-                className="form-input" />
+              {readOnly ? (
+                <ReadOnlyField value={report.engineer} />
+              ) : (
+                <input type="text" value={report.engineer}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onChange({ ...report, engineer: e.target.value })}
+                  className="form-input" />
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="form-label">SBE</label>
-                <input type="time" step="360" value={report.timeEvents.sbe}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, sbe: e.target.value }})}
-                  className="form-input font-mono" />
+                {readOnly ? (
+                  <ReadOnlyField value={report.timeEvents?.sbe} mono />
+                ) : (
+                  <input type="time" step="360" value={report.timeEvents.sbe}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, sbe: e.target.value }})}
+                    className="form-input font-mono" />
+                )}
               </div>
               {isDeparture ? (
                 <div>
                   <label className="form-label">FA</label>
-                  <input type="time" step="360" value={report.timeEvents.fa}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, fa: e.target.value }})}
-                    className="form-input font-mono" />
+                  {readOnly ? (
+                    <ReadOnlyField value={report.timeEvents?.fa} mono />
+                  ) : (
+                    <input type="time" step="360" value={report.timeEvents.fa}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, fa: e.target.value }})}
+                      className="form-input font-mono" />
+                  )}
                 </div>
               ) : (
                 <div>
                   <label className="form-label">FWE</label>
-                  <input type="time" step="360" value={report.timeEvents.fwe}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, fwe: e.target.value }})}
-                    className="form-input font-mono" />
+                  {readOnly ? (
+                    <ReadOnlyField value={report.timeEvents?.fwe} mono />
+                  ) : (
+                    <input type="time" step="360" value={report.timeEvents.fwe}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, fwe: e.target.value }})}
+                      className="form-input font-mono" />
+                  )}
                 </div>
               )}
             </div>
@@ -175,17 +199,20 @@ export function ReportForm({ report, onChange, densities, shipClass }) {
                 densities={densities}
                 showTotals={isLast}
                 cumulativeTotals={cumulativeTotals}
+                readOnly={readOnly}
               />
             );
           })}
 
-          <button
-            onClick={handleAddPhase}
-            className="w-full py-2.5 border-2 border-dashed rounded-lg font-semibold text-[0.72rem] mb-5 transition-all flex items-center justify-center gap-2"
-            style={{ borderColor: 'var(--color-border-subtle)', color: 'var(--color-dim)' }}
-          >
-            <Plus className="w-4 h-4" /> Add Fuel Changeover Phase
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleAddPhase}
+              className="w-full py-2.5 border-2 border-dashed rounded-lg font-semibold text-[0.72rem] mb-5 transition-all flex items-center justify-center gap-2"
+              style={{ borderColor: 'var(--color-border-subtle)', color: 'var(--color-dim)' }}
+            >
+              <Plus className="w-4 h-4" /> Add Fuel Changeover Phase
+            </button>
+          )}
 
           {/* Standby */}
           <div className="flex items-center gap-3 mb-4">
@@ -204,6 +231,7 @@ export function ReportForm({ report, onChange, densities, shipClass }) {
               densities={densities}
               showTotals
               cumulativeTotals={null}
+              readOnly={readOnly}
             />
           )}
 
@@ -218,47 +246,69 @@ export function ReportForm({ report, onChange, densities, shipClass }) {
                     <div className="fc-big mono">{grandTotals[f].toFixed(2)}</div>
                   </div>
                 ))}
-                <div className="fuel-col" style={{ textAlign: 'center' }}>
-                  <div className="fc-type" style={{ color: 'var(--color-text)' }}>{'\u03A3'} Total</div>
-                  <div className="fc-big mono" style={{ color: 'var(--color-text)' }}>{totalConsumption.toFixed(2)}</div>
+                <div className="fuel-col fuel-col-sigma">
+                  <div className="fc-type">{'\u03A3'} Total</div>
+                  <div className="fc-big mono">{totalConsumption.toFixed(2)}</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Departure: ROB + Bunkered */}
+          {/* Departure: Fuel ROB + Fuel Bunkered + Fresh Water Bunkered */}
           {isDeparture && (
-            <div className="grid grid-cols-2 gap-4 mt-5 max-w-xl">
+            <div className="grid grid-cols-3 gap-4 mt-5">
               <FuelInputCard
                 title="Fuel R.O.B. (MT)"
                 values={report.rob}
                 onChange={(v) => onChange({ ...report, rob: v })}
+                readOnly={readOnly}
               />
               <FuelInputCard
                 title="Fuel Bunkered (MT)"
                 values={report.bunkered}
                 onChange={(v) => onChange({ ...report, bunkered: v })}
+                readOnly={readOnly}
               />
+              <div className="cat-card water" style={{ gridColumn: 'unset' }}>
+                <div className="cat-label">Fresh Water Bunkered (MT)</div>
+                <div className="cat-body space-y-2">
+                  <div className="flex items-center gap-3">
+                    <label className="w-10 form-label mb-0 flex-shrink-0">Bunk.</label>
+                    {readOnly ? (
+                      <ReadOnlyInlineField value={report.freshWater?.bunkered} />
+                    ) : (
+                      <input type="number" step="0.1" value={report.freshWater.bunkered}
+                        onChange={(e) => onChange({ ...report, freshWater: { ...report.freshWater, bunkered: e.target.value }})}
+                        className="flex-1 min-w-0 form-input font-mono text-[0.78rem]" />
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Arrival: ROB + Fresh Water + AEP */}
+          {/* Arrival: ROB + Fresh Water (ROB/Prod/Cons) + AEP */}
           {!isDeparture && (
             <div className="grid grid-cols-3 gap-4 mt-5">
               <FuelInputCard
                 title="R.O.B. (MT)"
                 values={report.rob}
                 onChange={(v) => onChange({ ...report, rob: v })}
+                readOnly={readOnly}
               />
               <div className="cat-card water" style={{ gridColumn: 'unset' }}>
                 <div className="cat-label">Fresh Water (MT)</div>
                 <div className="cat-body space-y-2">
-                  {[['rob','R.O.B.'],['bunkered','Bunk.'],['production','Prod.'],['consumption','Cons.']].map(([k, lbl]) => (
+                  {[['rob','R.O.B.'],['production','Prod.'],['consumption','Cons.']].map(([k, lbl]) => (
                     <div key={k} className="flex items-center gap-3">
                       <label className="w-10 form-label mb-0 flex-shrink-0">{lbl}</label>
-                      <input type="number" step="0.1" value={report.freshWater[k]}
-                        onChange={(e) => onChange({ ...report, freshWater: { ...report.freshWater, [k]: e.target.value }})}
-                        className="flex-1 min-w-0 form-input font-mono text-[0.78rem]" />
+                      {readOnly ? (
+                        <ReadOnlyInlineField value={report.freshWater?.[k]} />
+                      ) : (
+                        <input type="number" step="0.1" value={report.freshWater[k]}
+                          onChange={(e) => onChange({ ...report, freshWater: { ...report.freshWater, [k]: e.target.value }})}
+                          className="flex-1 min-w-0 form-input font-mono text-[0.78rem]" />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -268,28 +318,44 @@ export function ReportForm({ report, onChange, densities, shipClass }) {
                 <div className="cat-body space-y-2">
                   <div>
                     <label className="form-label">Open Loop (hh:mm)</label>
-                    <input type="text" value={report.aep.openLoopHrs} placeholder="00:00"
-                      onChange={(e) => onChange({ ...report, aep: { ...report.aep, openLoopHrs: e.target.value }})}
-                      className="form-input font-mono text-[0.72rem]" />
+                    {readOnly ? (
+                      <ReadOnlyField value={report.aep?.openLoopHrs} mono smaller />
+                    ) : (
+                      <input type="text" value={report.aep.openLoopHrs} placeholder="00:00"
+                        onChange={(e) => onChange({ ...report, aep: { ...report.aep, openLoopHrs: e.target.value }})}
+                        className="form-input font-mono text-[0.72rem]" />
+                    )}
                   </div>
                   <div>
                     <label className="form-label">Closed Loop (hh:mm)</label>
-                    <input type="text" value={report.aep.closedLoopHrs} placeholder="00:00"
-                      onChange={(e) => onChange({ ...report, aep: { ...report.aep, closedLoopHrs: e.target.value }})}
-                      className="form-input font-mono text-[0.72rem]" />
+                    {readOnly ? (
+                      <ReadOnlyField value={report.aep?.closedLoopHrs} mono smaller />
+                    ) : (
+                      <input type="text" value={report.aep.closedLoopHrs} placeholder="00:00"
+                        onChange={(e) => onChange({ ...report, aep: { ...report.aep, closedLoopHrs: e.target.value }})}
+                        className="form-input font-mono text-[0.72rem]" />
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="form-label">NaOH Cons (L)</label>
-                      <input type="number" step="0.1" value={report.aep.alkaliCons}
-                        onChange={(e) => onChange({ ...report, aep: { ...report.aep, alkaliCons: e.target.value }})}
-                        className="form-input font-mono text-[0.72rem]" />
+                      {readOnly ? (
+                        <ReadOnlyField value={report.aep?.alkaliCons} mono smaller />
+                      ) : (
+                        <input type="number" step="0.1" value={report.aep.alkaliCons}
+                          onChange={(e) => onChange({ ...report, aep: { ...report.aep, alkaliCons: e.target.value }})}
+                          className="form-input font-mono text-[0.72rem]" />
+                      )}
                     </div>
                     <div>
                       <label className="form-label">NaOH ROB (L)</label>
-                      <input type="number" step="0.1" value={report.aep.alkaliRob}
-                        onChange={(e) => onChange({ ...report, aep: { ...report.aep, alkaliRob: e.target.value }})}
-                        className="form-input font-mono text-[0.72rem]" />
+                      {readOnly ? (
+                        <ReadOnlyField value={report.aep?.alkaliRob} mono smaller />
+                      ) : (
+                        <input type="number" step="0.1" value={report.aep.alkaliRob}
+                          onChange={(e) => onChange({ ...report, aep: { ...report.aep, alkaliRob: e.target.value }})}
+                          className="form-input font-mono text-[0.72rem]" />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -302,7 +368,7 @@ export function ReportForm({ report, onChange, densities, shipClass }) {
   );
 }
 
-function FuelInputCard({ title, values, onChange }) {
+function FuelInputCard({ title, values, onChange, readOnly = false }) {
   return (
     <div className="cat-card fuel" style={{ gridColumn: 'unset' }}>
       <div className="cat-label">{title}</div>
@@ -310,12 +376,43 @@ function FuelInputCard({ title, values, onChange }) {
         {FUELS.map((fuel) => (
           <div key={fuel} className="flex items-center gap-3">
             <label className="w-10 form-label mb-0 flex-shrink-0 uppercase">{fuel}</label>
-            <input type="number" step="0.01" value={values[fuel] ?? ''}
-              onChange={(e) => onChange({ ...values, [fuel]: e.target.value })}
-              className="flex-1 min-w-0 form-input font-mono text-[0.78rem]" />
+            {readOnly ? (
+              <ReadOnlyInlineField value={values?.[fuel]} />
+            ) : (
+              <input type="number" step="0.01" value={values[fuel] ?? ''}
+                onChange={(e) => onChange({ ...values, [fuel]: e.target.value })}
+                className="flex-1 min-w-0 form-input font-mono text-[0.78rem]" />
+            )}
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Static div that mimics the dimensions of a full-width `form-input`.
+function ReadOnlyField({ value, mono, smaller }) {
+  const v = value == null || value === '' ? '\u2014' : value;
+  return (
+    <div
+      className={`form-input ${mono ? 'font-mono' : ''} ${smaller ? 'text-[0.72rem]' : ''}`}
+      style={{ background: 'transparent', border: '1px solid transparent', cursor: 'default' }}
+    >
+      {v}
+    </div>
+  );
+}
+
+// Static div that mimics the dimensions of an inline `form-input` inside a
+// labelled flex row (FW Bunk./ROB/Prod/Cons, fuel ROB/Bunkered rows).
+function ReadOnlyInlineField({ value }) {
+  const v = value == null || value === '' ? '\u2014' : value;
+  return (
+    <div
+      className="flex-1 min-w-0 form-input font-mono text-[0.78rem]"
+      style={{ background: 'transparent', border: '1px solid transparent', cursor: 'default' }}
+    >
+      {v}
     </div>
   );
 }

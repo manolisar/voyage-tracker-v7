@@ -1,6 +1,6 @@
 // DetailPane — routes the currently-selected tree node to the correct detail
-// component. Uses VoyageStoreContext for selection + loaded data, and useAuth
-// for editMode (Phase 5: edit-mode swaps in the editable v6-style forms).
+// component. Uses VoyageStoreContext for selection + loaded data, and the
+// session context for editMode (flipped by the TopBar "Enable Edit" button).
 //
 // Selection shapes:
 //   null                                                  → EmptyState
@@ -11,7 +11,7 @@
 //   { filename, kind: 'voyageEnd' }                       → VoyageEndDetail
 
 import { useEffect, useCallback, useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { useSession } from '../../hooks/useSession';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
 import { defaultDensities } from '../../domain/shipClass';
 import { defaultVoyageReport } from '../../domain/factories';
@@ -25,8 +25,8 @@ import { VoyageReportSection } from '../voyage/VoyageReportSection';
 import { FloatingCarryOverButton } from '../ui/FloatingCarryOverButton';
 import { ManualCarryOverModal } from '../modals/ManualCarryOverModal';
 
-export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
-  const { editMode } = useAuth();
+export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage, onDeleteVoyage }) {
+  const { editMode } = useSession();
   const {
     selected, loadedById, loadVoyage, loadingFiles, updateVoyage,
     trackPhaseEnd,
@@ -92,6 +92,20 @@ export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
     }));
   }, [updateVoyage]);
 
+  // Seed an empty voyageReport on first visit for legacy legs (pre-v7 imports).
+  // Must run in an effect — doing this during render would trigger a setState
+  // on the store provider while DetailPane is still rendering.
+  const voyageForEffect = loadedById[selected?.filename];
+  const legForEffect = voyageForEffect?.legs?.find((l) => l.id === selected?.legId);
+  const needsVRSeed = editMode
+    && selected?.kind === 'voyageReport'
+    && legForEffect
+    && !legForEffect.voyageReport;
+  useEffect(() => {
+    if (!needsVRSeed) return;
+    onVoyageReportChange(voyageForEffect.filename, legForEffect.id, defaultVoyageReport());
+  }, [needsVRSeed, voyageForEffect?.filename, legForEffect?.id, onVoyageReportChange]);
+
   if (!selected) return <EmptyState ship={ship} />;
 
   const voyage = loadedById[selected.filename];
@@ -114,6 +128,7 @@ export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
         editMode={editMode}
         onAddLeg={onAddLeg}
         onEndVoyage={onEndVoyage}
+        onDeleteVoyage={onDeleteVoyage}
       />
     );
   }
@@ -172,14 +187,11 @@ export function DetailPane({ ship, shipClass, onAddLeg, onEndVoyage }) {
   }
 
   if (selected.kind === 'voyageReport') {
-    // Legacy legs (pre-v7 imports) may have voyageReport: null. Seed an empty
-    // one on first visit so the form has something to bind to. The mockup
-    // treats Voyage Report as always-present per leg.
+    // Legacy legs (pre-v7 imports) may have voyageReport: null — the effect
+    // above seeds one asynchronously. Until that settles we render against a
+    // throwaway default so the form has something to bind to.
     const vr = leg.voyageReport || defaultVoyageReport();
     if (editMode) {
-      if (!leg.voyageReport) {
-        onVoyageReportChange(voyage.filename, leg.id, vr);
-      }
       return (
         <div className="max-w-5xl mx-auto">
           <VoyageReportSection

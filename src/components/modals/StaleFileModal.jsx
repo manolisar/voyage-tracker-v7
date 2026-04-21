@@ -1,18 +1,19 @@
-// ConflictModal — shown when GitHub returns 409 on save (someone else edited
-// the same voyage between our load and our save).
+// StaleFileModal — shown when the on-disk mtime is newer than what we
+// loaded, meaning another crew member saved this voyage while we were
+// editing it. See the plan's "Stale-file check" section.
 //
-// Three options (CLAUDE.md §3):
-//   • Reload remote   — discard local edits, refetch the file
-//   • Force overwrite — re-save without a SHA, clobbering the remote version
-//   • Cancel          — keep editing locally, defer the choice
+// Three options:
+//   • Reload from disk  — discard local edits, refetch the file.
+//   • Overwrite anyway  — proceed with the save; the other edit is lost.
+//   • Cancel            — keep editing; save stays scheduled for retry.
 //
-// The actual reload / force / cancel logic lives in VoyageStoreProvider —
-// this component is purely the dialog.
+// The actual reload / overwrite / cancel logic lives in
+// VoyageStoreProvider — this component is purely the dialog.
 
 import { useEffect } from 'react';
 import { X, Cloud } from '../Icons';
 
-export function ConflictModal({
+export function StaleFileModal({
   filename,
   voyageLabel,
   onReload,
@@ -33,7 +34,7 @@ export function ConflictModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="conflict-title"
+        aria-labelledby="stale-file-title"
       >
         <div
           className="modal-head flex items-start justify-between"
@@ -42,9 +43,9 @@ export function ConflictModal({
           <div className="flex items-start gap-3">
             <Cloud className="w-6 h-6 mt-0.5 shrink-0" />
             <div>
-              <h2 id="conflict-title" style={{ color: 'inherit' }}>Save conflict</h2>
+              <h2 id="stale-file-title" style={{ color: 'inherit' }}>File changed on disk</h2>
               <p style={{ color: 'inherit', opacity: 0.85 }}>
-                Another editor changed <strong>{voyageLabel || filename}</strong> on the server while you were editing.
+                Another crew member saved <strong>{voyageLabel || filename}</strong> in the shared folder while you were editing.
               </p>
             </div>
           </div>
@@ -66,8 +67,8 @@ export function ConflictModal({
             Pick how to resolve this:
           </p>
           <ul className="text-sm space-y-2 list-disc pl-5" style={{ color: 'var(--color-text)' }}>
-            <li><strong>Reload remote</strong> — discard your local edits and load the latest version from GitHub.</li>
-            <li><strong>Force overwrite</strong> — push your local version, replacing the remote (the other edit will be in git history but not in the current file).</li>
+            <li><strong>Reload from disk</strong> — discard your local edits and load the latest version from the folder.</li>
+            <li><strong>Overwrite anyway</strong> — save your local version, replacing the on-disk file (the other edit is lost).</li>
             <li><strong>Cancel</strong> — keep your local edits, do nothing for now. You can copy values out, then resolve manually.</li>
           </ul>
 
@@ -86,7 +87,7 @@ export function ConflictModal({
               onClick={onReload}
               disabled={busy}
             >
-              {busy ? 'Working…' : 'Reload remote'}
+              {busy ? 'Working…' : 'Reload from disk'}
             </button>
             <button
               type="button"
@@ -94,7 +95,7 @@ export function ConflictModal({
               onClick={onForce}
               disabled={busy}
             >
-              {busy ? 'Working…' : 'Force overwrite'}
+              {busy ? 'Working…' : 'Overwrite anyway'}
             </button>
           </div>
         </div>

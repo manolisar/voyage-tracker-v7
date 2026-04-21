@@ -31,11 +31,13 @@ export function validateVoyageData(data, { shipClass, expectedShipId } = {}) {
 
   const fallbackDensities = shipClass ? defaultDensities(shipClass) : { HFO: 0.92, MGO: 0.83, LSFO: 0.92 };
 
+  const emptyPort = { code: '', name: '', country: '', locode: '' };
   const fixed = {
     id: data.id || Date.now(),
     shipId: data.shipId || expectedShipId || null,
     classId: data.classId || shipClass?.id || null,
-    name: data.name || '',
+    fromPort: data.fromPort || emptyPort,
+    toPort:   data.toPort   || emptyPort,
     startDate: data.startDate || '',
     endDate: data.endDate || '',
     legs: Array.isArray(data.legs)

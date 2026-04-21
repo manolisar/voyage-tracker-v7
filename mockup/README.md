@@ -35,6 +35,17 @@ Tailwind is loaded via CDN; the only network requests are to `cdn.tailwindcss.co
 
 **Isn't:** Functional. Nothing saves. Any password works. The data shown is hardcoded fake data for 3 sample voyages.
 
+## What's been superseded since sign-off
+
+The v7 app pivoted from a GitHub-backed data repo with PAT + PIN auth to a **local-file / network-folder** model (File System Access API, no auth). The following surfaces in this mockup no longer match the shipped app — see `CLAUDE.md` §4 and §8 for the current spec:
+
+- **Login screen** — the mockup asks for a PIN; the real app asks for ship + name + role + network folder. No PIN.
+- **Lock / Enable Edit overlay** — the mockup gates Edit Mode behind a PIN entry modal; the real app is a one-click toggle.
+- **Admin Panel** — gone. Replaced by a plain **Settings** modal (Change folder / Export / Import / Switch ship).
+- **Conflict modal** — replaced by **`StaleFileModal`** with mtime-drift semantics (Reload from disk / Overwrite anyway / Cancel).
+
+Everything else (tree pane, detail pane, forms, creation modals, color, typography, dark mode, independent pane scrolling) still matches.
+
 ## What I want feedback on
 
 1. **Tree pane (left)** — does the indent / icon / dirty-dot scheme work? Any voyages/legs you'd organize differently?
