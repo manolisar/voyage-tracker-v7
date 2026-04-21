@@ -10,10 +10,14 @@
 // auto-derivation more trouble than it's worth. Steaming Time is a
 // plain HH:mm text field — v6 behavior.
 //
-// v7 change: time pickers use step="360" (6-min) instead of v6's step="60".
+// Time pickers: SBE/FA/FWE use <TimePicker6Min> (two-select compound
+// picker restricted to 6-min boundaries). We tried step="360" on native
+// <input type="time"> in v7, but Chromium's popup ignores step and
+// always shows 1-min slots in the minute column.
 
 import { useState } from 'react';
 import { ChevronRight, Compass, X } from '../Icons';
+import { TimePicker6Min } from '../ui/TimePicker6Min';
 
 // displayAvg: what to show in the form (em-dash if unknown).
 function displayAvg(distance, time) {
@@ -223,12 +227,12 @@ export function VoyageReportSection({
               <div className="vr-col-head">Departure</div>
               <div className="vr-field">
                 <Field
-                  label="SBE" type="time" step="360"
+                  label="SBE" type="time6"
                   value={vr.departure.sbe} readOnly={readOnly}
                   onChange={(v) => updateField('departure', 'sbe', v)}
                 />
                 <Field
-                  label="FA (Full Away)" type="time" step="360"
+                  label="FA (Full Away)" type="time6"
                   value={vr.departure.fa} readOnly={readOnly}
                   onChange={(v) => updateField('departure', 'fa', v)}
                 />
@@ -277,12 +281,12 @@ export function VoyageReportSection({
               <div className="vr-col-head">Arrival</div>
               <div className="vr-field">
                 <Field
-                  label="SBE" type="time" step="360"
+                  label="SBE" type="time6"
                   value={vr.arrival.sbe} readOnly={readOnly}
                   onChange={(v) => updateField('arrival', 'sbe', v)}
                 />
                 <Field
-                  label="FWE" type="time" step="360"
+                  label="FWE" type="time6"
                   value={vr.arrival.fwe} readOnly={readOnly}
                   onChange={(v) => updateField('arrival', 'fwe', v)}
                 />
@@ -305,10 +309,21 @@ export function VoyageReportSection({
   );
 }
 
-// Unified field renderer: real `<input>` in edit mode, a static div that
-// matches the input's dimensions in read-only mode. Keeps view and edit
-// visually aligned so toggling Edit Mode doesn't reflow the card.
+// Unified field renderer: real `<input>` in edit mode (or the custom
+// <TimePicker6Min> when type="time6"), a static div that matches the
+// input's dimensions in read-only mode. Keeps view and edit visually
+// aligned so toggling Edit Mode doesn't reflow the card.
 function Field({ label, type, step, value, onChange, readOnly, placeholder }) {
+  // Time inputs constrained to 6-min slots get the custom picker. The
+  // TimePicker6Min component handles its own readOnly rendering.
+  if (type === 'time6') {
+    return (
+      <div>
+        <label className="form-label">{label}</label>
+        <TimePicker6Min value={value} onChange={onChange} readOnly={readOnly} />
+      </div>
+    );
+  }
   return (
     <div>
       <label className="form-label">{label}</label>

@@ -2,7 +2,9 @@
 // v7 refactor:
 //   - equipment list driven by `shipClass.equipment` (passed down to PhaseSection).
 //   - engine/boiler partition uses each item's `category`.
-//   - all time inputs use step="360" (6-min increments) per user spec.
+//   - SBE/FA/FWE time pickers use <TimePicker6Min> (two-select compound
+//     picker restricted to 6-min slots). Native <input type="time"
+//     step="360"> was the v7 attempt but Chromium's popup ignores step.
 
 import { useState } from 'react';
 import { ChevronRight, Plus } from '../Icons';
@@ -11,6 +13,7 @@ import { calcConsumption } from '../../domain/calculations';
 import { PHASE_TYPES, REPORT_TYPES } from '../../domain/constants';
 import { createPhase } from '../../domain/factories';
 import { PhaseSection } from './PhaseSection';
+import { TimePicker6Min } from '../ui/TimePicker6Min';
 
 const FUELS = ['hfo', 'mgo', 'lsfo'];
 
@@ -139,38 +142,29 @@ export function ReportForm({ report, onChange, densities, shipClass, readOnly = 
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="form-label">SBE</label>
-                {readOnly ? (
-                  <ReadOnlyField value={report.timeEvents?.sbe} mono />
-                ) : (
-                  <input type="time" step="360" value={report.timeEvents.sbe}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, sbe: e.target.value }})}
-                    className="form-input font-mono" />
-                )}
+                <TimePicker6Min
+                  value={report.timeEvents?.sbe || ''}
+                  readOnly={readOnly}
+                  onChange={(v) => onChange({ ...report, timeEvents: { ...report.timeEvents, sbe: v }})}
+                />
               </div>
               {isDeparture ? (
                 <div>
                   <label className="form-label">FA</label>
-                  {readOnly ? (
-                    <ReadOnlyField value={report.timeEvents?.fa} mono />
-                  ) : (
-                    <input type="time" step="360" value={report.timeEvents.fa}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, fa: e.target.value }})}
-                      className="form-input font-mono" />
-                  )}
+                  <TimePicker6Min
+                    value={report.timeEvents?.fa || ''}
+                    readOnly={readOnly}
+                    onChange={(v) => onChange({ ...report, timeEvents: { ...report.timeEvents, fa: v }})}
+                  />
                 </div>
               ) : (
                 <div>
                   <label className="form-label">FWE</label>
-                  {readOnly ? (
-                    <ReadOnlyField value={report.timeEvents?.fwe} mono />
-                  ) : (
-                    <input type="time" step="360" value={report.timeEvents.fwe}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => onChange({ ...report, timeEvents: { ...report.timeEvents, fwe: e.target.value }})}
-                      className="form-input font-mono" />
-                  )}
+                  <TimePicker6Min
+                    value={report.timeEvents?.fwe || ''}
+                    readOnly={readOnly}
+                    onChange={(v) => onChange({ ...report, timeEvents: { ...report.timeEvents, fwe: v }})}
+                  />
                 </div>
               )}
             </div>
