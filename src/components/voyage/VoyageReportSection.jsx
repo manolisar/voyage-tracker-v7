@@ -7,8 +7,10 @@
 // Manually entered: Steaming Time. It spans a cross-zone sea passage
 // where the naive HH:MM diff is wrong by the zone-offset delta and the
 // bridge-log convention (ship time adjusted to local port time) makes
-// auto-derivation more trouble than it's worth. Steaming Time is a
-// plain HH:mm text field — v6 behavior.
+// auto-derivation more trouble than it's worth. Steaming Time uses a
+// <DurationPicker> (digits-only hours + 6-min minute <select>);
+// v6 had a plain HH:mm text field but "123"-style typos were common
+// and avg speed silently stayed "— kts" with no feedback.
 //
 // Time pickers: SBE/FA/FWE use <TimePicker6Min> (two-select compound
 // picker restricted to 6-min boundaries). We tried step="360" on native
@@ -18,6 +20,7 @@
 import { useState } from 'react';
 import { ChevronRight, Compass, X } from '../Icons';
 import { TimePicker6Min } from '../ui/TimePicker6Min';
+import { DurationPicker } from '../ui/DurationPicker';
 
 // displayAvg: what to show in the form (em-dash if unknown).
 function displayAvg(distance, time) {
@@ -74,15 +77,6 @@ function steamingTimeToDecimalHours(s) {
   const mm = parseInt(m[2], 10);
   if (mm < 0 || mm > 59) return '';
   return (h + mm / 60).toFixed(2);
-}
-
-// True when the field has content but the HH:MM format check fails —
-// used to surface an inline hint so the crew knows WHY avg speed is
-// blank (silent rejection was the v6 UX; v7 calls it out). Empty is
-// fine — means "not yet entered."
-function isSteamingTimeMalformed(s) {
-  if (!s) return false;
-  return steamingTimeToDecimalHours(s) === '';
 }
 
 // Minutes → "HH:mm" for display and persistence. The voyage JSON stores
@@ -270,18 +264,10 @@ export function VoyageReportSection({
               </div>
               <div className="vr-field-full">
                 <Field
-                  label="Steaming Time (hh:mm)" type="text" placeholder="e.g. 14:30"
+                  label="Steaming Time" type="duration"
                   value={vr.voyage.steamingTime} readOnly={readOnly}
                   onChange={(v) => updateField('voyage', 'steamingTime', v)}
                 />
-                {isSteamingTimeMalformed(vr.voyage.steamingTime) && (
-                  <div
-                    className="text-[0.65rem] mt-1 px-1 font-mono"
-                    style={{ color: 'var(--color-error-fg)' }}
-                  >
-                    {'\u26A0 Use HH:MM \u2014 e.g. "14:30" or "144:30"'}
-                  </div>
-                )}
               </div>
               <div className="vr-calc mono"
                    style={{ marginTop: '0.5rem', fontSize: '1.1rem', padding: '0.6rem' }}>
@@ -326,10 +312,10 @@ export function VoyageReportSection({
   );
 }
 
-// Unified field renderer: real `<input>` in edit mode (or the custom
-// <TimePicker6Min> when type="time6"), a static div that matches the
-// input's dimensions in read-only mode. Keeps view and edit visually
-// aligned so toggling Edit Mode doesn't reflow the card.
+// Unified field renderer: real `<input>` in edit mode (or a custom
+// compound picker when type="time6" / "duration"), a static div that
+// matches the input's dimensions in read-only mode. Keeps view and
+// edit visually aligned so toggling Edit Mode doesn't reflow the card.
 function Field({ label, type, step, value, onChange, readOnly, placeholder }) {
   // Time inputs constrained to 6-min slots get the custom picker. The
   // TimePicker6Min component handles its own readOnly rendering.
@@ -338,6 +324,16 @@ function Field({ label, type, step, value, onChange, readOnly, placeholder }) {
       <div>
         <label className="form-label">{label}</label>
         <TimePicker6Min value={value} onChange={onChange} readOnly={readOnly} />
+      </div>
+    );
+  }
+  // Elapsed-time duration inputs (e.g. Steaming Time). Hours unbounded,
+  // minutes a 6-min slot select. DurationPicker handles readOnly itself.
+  if (type === 'duration') {
+    return (
+      <div>
+        <label className="form-label">{label}</label>
+        <DurationPicker value={value} onChange={onChange} readOnly={readOnly} />
       </div>
     );
   }
