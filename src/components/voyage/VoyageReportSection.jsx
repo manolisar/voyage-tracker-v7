@@ -76,6 +76,15 @@ function steamingTimeToDecimalHours(s) {
   return (h + mm / 60).toFixed(2);
 }
 
+// True when the field has content but the HH:MM format check fails —
+// used to surface an inline hint so the crew knows WHY avg speed is
+// blank (silent rejection was the v6 UX; v7 calls it out). Empty is
+// fine — means "not yet entered."
+function isSteamingTimeMalformed(s) {
+  if (!s) return false;
+  return steamingTimeToDecimalHours(s) === '';
+}
+
 // Minutes → "HH:mm" for display and persistence. The voyage JSON stores
 // elapsed times in this format (crew-facing logbook notation) — avg-speed
 // math converts it back to decimal hours on the fly.
@@ -265,6 +274,14 @@ export function VoyageReportSection({
                   value={vr.voyage.steamingTime} readOnly={readOnly}
                   onChange={(v) => updateField('voyage', 'steamingTime', v)}
                 />
+                {isSteamingTimeMalformed(vr.voyage.steamingTime) && (
+                  <div
+                    className="text-[0.65rem] mt-1 px-1 font-mono"
+                    style={{ color: 'var(--color-error-fg)' }}
+                  >
+                    {'\u26A0 Use HH:MM \u2014 e.g. "14:30" or "144:30"'}
+                  </div>
+                )}
               </div>
               <div className="vr-calc mono"
                    style={{ marginTop: '0.5rem', fontSize: '1.1rem', padding: '0.6rem' }}>
