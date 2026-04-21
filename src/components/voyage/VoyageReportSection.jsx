@@ -1,12 +1,19 @@
 // VoyageReportSection — Bridge / navigation data per leg.
-// 3 columns: Departure / Sea Passage / Arrival. Time and avg-speed fields
-// are both derived — time falls out of the HH:MM timestamps on each side,
-// avg speed falls out of distance / time.
+// 3 columns: Departure / Sea Passage / Arrival.
+//
+// Auto-derived: Pier→FA Time, SBE→Berth Time (same-day, same-zone HH:MM
+// diffs that are always safe), and all three avg-speed cells (distance ÷
+// time).
+// Manually entered: Steaming Time. It spans a cross-zone sea passage
+// where the naive HH:MM diff is wrong by the zone-offset delta and the
+// bridge-log convention (ship time adjusted to local port time) makes
+// auto-derivation more trouble than it's worth. Steaming Time is a
+// plain HH:mm text field — v6 behavior.
+//
 // v7 change: time pickers use step="360" (6-min) instead of v6's step="60".
 
 import { useState } from 'react';
 import { ChevronRight, Compass, X } from '../Icons';
-import { TIME_ZONE_GROUPS, tzLabel } from '../../domain/timeZones';
 
 // displayAvg: what to show in the form (em-dash if unknown).
 function displayAvg(distance, time) {
@@ -50,60 +57,19 @@ function diffMinutesSameDay(startHHMM, endHHMM) {
   return mins;
 }
 
-// Convert a local civil time ({YYYY-MM-DD, HH:MM}) in IANA zone `tz` to a
-// UTC millisecond epoch. Works by taking the same wall-clock reading
-// interpreted as UTC, asking Intl what that instant looks like in `tz`,
-// and reading off the offset — then correcting. Loses 1h of precision
-// around DST "fall back" boundaries (where a local time occurs twice);
-// that's acceptable for a ship's log. Returns null on bad input.
-function localToUtcMs(dateStr, hhmm, tz) {
-  const mins = parseHHMM(hhmm);
-  if (mins == null) return null;
-  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || '');
-  if (!dm) return null;
-  const y = Number(dm[1]); const mo = Number(dm[2]); const d = Number(dm[3]);
-  const h = Math.floor(mins / 60); const mi = mins % 60;
-  // Initial guess: treat the local components as if they were UTC.
-  const guessUtc = Date.UTC(y, mo - 1, d, h, mi);
-  if (!Number.isFinite(guessUtc)) return null;
-  // No tz → caller wants naive math. Return the guess (same-clock diff).
-  if (!tz) return guessUtc;
-  // Ask Intl: at this UTC instant, what wall-clock time does `tz` show?
-  let parts;
-  try {
-    parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false,
-    }).formatToParts(new Date(guessUtc));
-  } catch {
-    // Invalid tz id — fall back to naive.
-    return guessUtc;
-  }
-  const p = {};
-  for (const it of parts) p[it.type] = it.value;
-  // Reconstruct "local civil time at guessUtc in tz" as if it were UTC.
-  const asUtc = Date.UTC(
-    Number(p.year), Number(p.month) - 1, Number(p.day),
-    Number(p.hour) % 24, Number(p.minute), Number(p.second),
-  );
-  const offsetMs = asUtc - guessUtc; // positive east of UTC
-  // Actual UTC = the wall-clock-as-UTC minus the zone's offset.
-  return guessUtc - offsetMs;
-}
-
-// Cross-date, cross-zone HH:MM diff for total steaming time from FA(dep)
-// at `depDate` in `depTz`, to SBE(arr) at `arrDate` in `arrTz`. Either tz
-// can be '' — the helper treats a missing zone as "same clock as the
-// other side" (naive math). Returns null on bad input or non-positive delta.
-function diffMinutesLocal(startDate, startHHMM, startTz, endDate, endHHMM, endTz) {
-  if (!startDate || !endDate) return null;
-  const startMs = localToUtcMs(startDate, startHHMM, startTz);
-  const endMs   = localToUtcMs(endDate,   endHHMM,   endTz);
-  if (startMs == null || endMs == null) return null;
-  if (endMs <= startMs) return null;
-  return Math.round((endMs - startMs) / 60000);
+// Parse a Steaming Time string in "HH:MM" form to decimal hours — the
+// unit the avg-speed math wants. Unlike parseHHMM (which guards 0-23h
+// for wall-clock times), this allows arbitrary hour magnitudes so a
+// 6-day transatlantic "144:30" parses correctly. Returns '' on bad input
+// so persistAvg / displayAvg see the same shape they got before.
+function steamingTimeToDecimalHours(s) {
+  if (!s || typeof s !== 'string') return '';
+  const m = s.match(/^(\d+):(\d{2})$/);
+  if (!m) return '';
+  const h = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  if (mm < 0 || mm > 59) return '';
+  return (h + mm / 60).toFixed(2);
 }
 
 // Minutes → "HH:mm" for display and persistence. The voyage JSON stores
@@ -122,19 +88,23 @@ function minutesToDecimalHours(mins) {
   return (mins / 60).toFixed(2);
 }
 
-// Recompute every derived field on the voyage report so the stored object
-// is the one of record — the read-only view renders `time` / `avgSpeed` /
-// `steamingTime` / `averageSpeed` directly without recomputing.
+// Recompute derived fields on the voyage report so the stored object is
+// the one of record — the read-only view renders `time` / `avgSpeed` /
+// `averageSpeed` directly without recomputing.
 //
-// Derivation order matters: time depends on timestamps, avg speed depends
-// on (distance, derived time).
-function withDerivedFields(vr, depDate, arrDate) {
+// Two kinds of derivation:
+//  - Pier→FA / SBE→Berth Time: same-day same-zone HH:MM diffs. Always safe.
+//  - Avg speed (all three cells): distance ÷ time. Pier→FA and SBE→Berth
+//    use the derived times; voyage avg speed uses the MANUALLY entered
+//    Steaming Time (cross-zone auto-derivation is not worth the edge
+//    cases — see the file-header comment).
+//
+// `depDate` / `arrDate` are accepted but no longer used; kept in the
+// signature so the callsites in the component body don't need to change.
+function withDerivedFields(vr) {
   const pMins = diffMinutesSameDay(vr.departure.sbe, vr.departure.fa);
   const aMins = diffMinutesSameDay(vr.arrival.sbe, vr.arrival.fwe);
-  const sMins = diffMinutesLocal(
-    depDate, vr.departure.fa,  vr.departure.tz,
-    arrDate, vr.arrival.sbe,   vr.arrival.tz,
-  );
+  const sDec  = steamingTimeToDecimalHours(vr.voyage.steamingTime);
   return {
     ...vr,
     departure: {
@@ -147,8 +117,7 @@ function withDerivedFields(vr, depDate, arrDate) {
     },
     voyage: {
       ...vr.voyage,
-      steamingTime: formatMinutes(sMins),
-      averageSpeed: persistAvg(vr.voyage.totalMiles, minutesToDecimalHours(sMins)),
+      averageSpeed: persistAvg(vr.voyage.totalMiles, sDec),
     },
     arrival: {
       ...vr.arrival,
@@ -175,31 +144,23 @@ export function VoyageReportSection({
   const vr = voyageReport;
 
   const updateField  = (section, field, value) =>
-    onChange(withDerivedFields({ ...vr, [section]: { ...vr[section], [field]: value } }, depDate, arrDate));
+    onChange(withDerivedFields({ ...vr, [section]: { ...vr[section], [field]: value } }));
   const updateNested = (section, sub, field, value) =>
     onChange(withDerivedFields({
       ...vr,
       [section]: { ...vr[section], [sub]: { ...vr[section][sub], [field]: value } },
-    }, depDate, arrDate));
+    }));
 
-  // Times are derived from the timestamps; avg speed falls out of those.
+  // Pier→FA and SBE→Berth Time fall out of the HH:MM stamps on each side.
+  // Steaming Time is manually entered (see file-header comment). All
+  // three avg-speed cells are derived.
   const pMins = diffMinutesSameDay(vr.departure.sbe, vr.departure.fa);
   const aMins = diffMinutesSameDay(vr.arrival.sbe, vr.arrival.fwe);
-  const sMins = diffMinutesLocal(
-    depDate, vr.departure.fa,  vr.departure.tz,
-    arrDate, vr.arrival.sbe,   vr.arrival.tz,
-  );
-  // "Zone assumption" — when either tz is missing, or they're the same,
-  // the cross-port math collapses to naive subtraction. We surface this
-  // on the Steaming Time field so the crew knows which math is running.
-  const steamingSameZone = !vr.departure.tz || !vr.arrival.tz ||
-    vr.departure.tz === vr.arrival.tz;
   const pierToFATime    = formatMinutes(pMins);
   const sbeToBerthTime  = formatMinutes(aMins);
-  const steamingTime    = formatMinutes(sMins);
   const pierToFASpeed   = displayAvg(vr.departure.pierToFA.distance, minutesToDecimalHours(pMins));
   const sbeToBerthSpeed = displayAvg(vr.arrival.sbeToBerth.distance, minutesToDecimalHours(aMins));
-  const voyageAvgSpeed  = displayAvg(vr.voyage.totalMiles, minutesToDecimalHours(sMins));
+  const voyageAvgSpeed  = displayAvg(vr.voyage.totalMiles, steamingTimeToDecimalHours(vr.voyage.steamingTime));
 
   return (
     <div className="cat-card nav rounded-xl overflow-hidden mb-4">
@@ -260,12 +221,6 @@ export function VoyageReportSection({
             {/* DEPARTURE */}
             <div className="vr-col">
               <div className="vr-col-head">Departure</div>
-              <TzField
-                label="Port Zone"
-                value={vr.departure.tz}
-                readOnly={readOnly}
-                onChange={(v) => updateField('departure', 'tz', v)}
-              />
               <div className="vr-field">
                 <Field
                   label="SBE" type="time" step="360"
@@ -301,14 +256,10 @@ export function VoyageReportSection({
                 />
               </div>
               <div className="vr-field-full">
-                <DerivedField
-                  label="Steaming Time (hh:mm)"
-                  value={steamingTime}
-                  hint={steamingSameZone
-                    ? (vr.departure.tz && vr.arrival.tz
-                        ? 'Both zones equal — naive diff'
-                        : 'Set port zones above for cross-zone math')
-                    : `${tzLabel(vr.departure.tz)} \u2192 ${tzLabel(vr.arrival.tz)}`}
+                <Field
+                  label="Steaming Time (hh:mm)" type="text" placeholder="e.g. 14:30"
+                  value={vr.voyage.steamingTime} readOnly={readOnly}
+                  onChange={(v) => updateField('voyage', 'steamingTime', v)}
                 />
               </div>
               <div className="vr-calc mono"
@@ -324,12 +275,6 @@ export function VoyageReportSection({
             {/* ARRIVAL */}
             <div className="vr-col">
               <div className="vr-col-head">Arrival</div>
-              <TzField
-                label="Port Zone"
-                value={vr.arrival.tz}
-                readOnly={readOnly}
-                onChange={(v) => updateField('arrival', 'tz', v)}
-              />
               <div className="vr-field">
                 <Field
                   label="SBE" type="time" step="360"
@@ -363,7 +308,7 @@ export function VoyageReportSection({
 // Unified field renderer: real `<input>` in edit mode, a static div that
 // matches the input's dimensions in read-only mode. Keeps view and edit
 // visually aligned so toggling Edit Mode doesn't reflow the card.
-function Field({ label, type, step, value, onChange, readOnly }) {
+function Field({ label, type, step, value, onChange, readOnly, placeholder }) {
   return (
     <div>
       <label className="form-label">{label}</label>
@@ -379,6 +324,7 @@ function Field({ label, type, step, value, onChange, readOnly }) {
           type={type}
           step={step}
           value={value}
+          placeholder={placeholder}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => onChange(e.target.value)}
           className="form-input font-mono text-[0.78rem]"
@@ -389,12 +335,10 @@ function Field({ label, type, step, value, onChange, readOnly }) {
 }
 
 // DerivedField: a read-only field for values the form computes from other
-// inputs (Time (hh:mm) falls out of the HH:MM timestamps, avg speed out of
-// distance/time). Styled as an input-shaped box with a `calc` badge so it
-// reads as "this was derived, not typed." Optional `hint` renders as a
-// small caption below the field — used by Steaming Time to show which
-// zone pair the math ran across, or to nudge the user to set them.
-function DerivedField({ label, value, hint }) {
+// inputs (Pier→FA and SBE→Berth Time fall out of the HH:MM timestamps).
+// Styled as an input-shaped box with a dashed border + "auto" badge so
+// it reads as "this was computed, not typed."
+function DerivedField({ label, value }) {
   return (
     <div>
       <label className="form-label flex items-center gap-1.5">
@@ -419,54 +363,6 @@ function DerivedField({ label, value, hint }) {
       >
         {value || '\u2014'}
       </div>
-      {hint && (
-        <div
-          className="text-[0.6rem] mt-1 font-medium"
-          style={{ color: 'var(--color-faint)', letterSpacing: '0.02em' }}
-        >
-          {hint}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// TzField: IANA zone dropdown, grouped by region. Storing the IANA id as
-// the <option value> keeps Intl.DateTimeFormat happy downstream; the
-// curated labels in TIME_ZONE_GROUPS make the list scannable.
-// In read-only mode, renders the friendly label (or "\u2014" when unset).
-function TzField({ label, value, onChange, readOnly }) {
-  if (readOnly) {
-    return (
-      <div style={{ marginBottom: '0.6rem' }}>
-        <label className="form-label">{label}</label>
-        <div
-          className="form-input text-[0.78rem]"
-          style={{ background: 'transparent', border: '1px solid transparent', cursor: 'default' }}
-        >
-          {value ? tzLabel(value) : '\u2014'}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div style={{ marginBottom: '0.6rem' }}>
-      <label className="form-label">{label}</label>
-      <select
-        value={value || ''}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => onChange(e.target.value)}
-        className="form-input text-[0.78rem]"
-      >
-        <option value="">{'\u2014 Select zone \u2014'}</option>
-        {TIME_ZONE_GROUPS.map((group) => (
-          <optgroup key={group.label} label={group.label}>
-            {group.zones.map((z) => (
-              <option key={z.id} value={z.id}>{z.label}</option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
     </div>
   );
 }
