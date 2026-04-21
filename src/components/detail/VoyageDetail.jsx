@@ -3,6 +3,8 @@
 // + Densities + Legs list. Mirrors the mockup's renderVoyageDetail().
 
 import { calcVoyageTotals, formatMT } from '../../domain/calculations';
+import { voyageRouteLongLabel } from '../../domain/factories';
+import { Trash2 } from '../Icons';
 
 const FUEL_COLS = [
   { key: 'hfo',  label: 'HFO'  },
@@ -37,7 +39,7 @@ function lastAep(voyage) {
   return null;
 }
 
-export function VoyageDetail({ voyage, shipClass, ship, editMode, onAddLeg, onEndVoyage }) {
+export function VoyageDetail({ voyage, shipClass, ship, editMode, onAddLeg, onEndVoyage, onDeleteVoyage }) {
   const totals = calcVoyageTotals(voyage, shipClass);
   const ended = !!voyage.voyageEnd;
   const rob = lastReportRob(voyage);
@@ -53,7 +55,7 @@ export function VoyageDetail({ voyage, shipClass, ship, editMode, onAddLeg, onEn
       <section className="glass-card rounded-2xl overflow-hidden mb-5">
         <div className="leg-head px-5 py-4 flex items-center gap-3 flex-wrap">
           <div className="text-[1.1rem] font-extrabold tracking-tight" style={{ color: 'var(--color-text)' }}>
-            {voyage.name}
+            {voyageRouteLongLabel(voyage)}
           </div>
           {ended ? (
             <span
@@ -82,8 +84,17 @@ export function VoyageDetail({ voyage, shipClass, ship, editMode, onAddLeg, onEn
           )}
           <div className="total-pill" title="Storage filename">{filename}</div>
         </div>
-        <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-5">
-          <Field label="Voyage name" value={voyage.name} />
+        <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-5">
+          <Field
+            label="Embark"
+            value={voyage.fromPort?.name || voyage.fromPort?.code || '—'}
+            hint={voyage.fromPort?.locode}
+          />
+          <Field
+            label="Disembark"
+            value={voyage.toPort?.name || voyage.toPort?.code || '—'}
+            hint={voyage.toPort?.locode}
+          />
           <Field label="Start date" value={voyage.startDate} mono />
           <Field label="End date"   value={voyage.endDate || '—'} mono />
         </div>
@@ -151,7 +162,7 @@ export function VoyageDetail({ voyage, shipClass, ship, editMode, onAddLeg, onEn
       <section className="glass-card rounded-2xl p-5 mb-5">
         <div className="flex items-center mb-3">
           <div className="section-label">
-            Fuel Densities <span className="font-mono ml-2" style={{ color: 'var(--color-dim)' }}>t/m³ @ 30 °C</span>
+            Fuel Densities <span className="font-mono ml-2" style={{ color: 'var(--color-dim)' }}>t/m³ @ Counters</span>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-4">
@@ -172,23 +183,37 @@ export function VoyageDetail({ voyage, shipClass, ship, editMode, onAddLeg, onEn
       <div className="flex items-center mb-3">
         <div className="section-label">Legs</div>
         <div className="flex-1" />
-        {editMode && !ended && (
+        {editMode && (
           <div className="flex gap-2">
+            {!ended && (
+              <>
+                <button
+                  type="button"
+                  className="btn-primary px-3 py-1.5 rounded-lg text-xs"
+                  onClick={() => onAddLeg?.(filename)}
+                  title="Append a new leg to this voyage"
+                >
+                  + Add Leg
+                </button>
+                <button
+                  type="button"
+                  className="btn-warning px-3 py-1.5 rounded-lg text-xs"
+                  onClick={() => onEndVoyage?.(filename)}
+                  title="Finalize voyage and record lub-oil"
+                >
+                  ⚑ End Voyage
+                </button>
+              </>
+            )}
             <button
               type="button"
-              className="btn-primary px-3 py-1.5 rounded-lg text-xs"
-              onClick={() => onAddLeg?.(filename)}
-              title="Append a new leg to this voyage"
+              className="btn-flat px-3 py-1.5 rounded-lg text-xs flex items-center gap-1"
+              onClick={() => onDeleteVoyage?.(filename)}
+              title="Delete this voyage permanently"
+              style={{ color: 'var(--color-error-fg)' }}
             >
-              + Add Leg
-            </button>
-            <button
-              type="button"
-              className="btn-warning px-3 py-1.5 rounded-lg text-xs"
-              onClick={() => onEndVoyage?.(filename)}
-              title="Finalize voyage and record lub-oil"
-            >
-              ⚑ End Voyage
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete voyage
             </button>
           </div>
         )}
@@ -213,7 +238,7 @@ export function VoyageDetail({ voyage, shipClass, ship, editMode, onAddLeg, onEn
   );
 }
 
-function Field({ label, value, mono }) {
+function Field({ label, value, mono, hint }) {
   return (
     <div>
       <div className="form-label">{label}</div>
@@ -223,6 +248,11 @@ function Field({ label, value, mono }) {
       >
         {value || '—'}
       </div>
+      {hint && (
+        <div className="text-[0.65rem] font-mono mt-0.5" style={{ color: 'var(--color-faint)' }}>
+          {hint}
+        </div>
+      )}
     </div>
   );
 }

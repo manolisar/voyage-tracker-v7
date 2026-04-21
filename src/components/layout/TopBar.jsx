@@ -1,15 +1,15 @@
 // TopBar — persistent header across the main view.
 // Carries: hamburger (sidebar toggle) · title/ship · edit/view badge · primary
-// actions (Enable Edit / Exit Edit) · admin · theme · logout.
+// actions (Enable Edit / Exit Edit) · settings · theme · sign-out.
 
 import { useTheme } from '../../hooks/useTheme';
-import { useAuth } from '../../hooks/useAuth';
+import { useSession } from '../../hooks/useSession';
 import { EDITOR_ROLE_LABELS } from '../../domain/constants';
 import { Anchor, Edit, Eye, LogOut, Menu, Moon, Settings, Sun, Unlock } from '../Icons';
 
-export function TopBar({ ship, onToggleSidebar, onOpenEditModal, onOpenAdmin, onNewVoyage }) {
+export function TopBar({ ship, onToggleSidebar, onEnableEdit, onOpenSettings, onNewVoyage }) {
   const { theme, toggleTheme } = useTheme();
-  const { editMode, editor, exitEditMode, logout } = useAuth();
+  const { editMode, role, exitEditMode, endSession } = useSession();
 
   return (
     <header
@@ -53,7 +53,7 @@ export function TopBar({ ship, onToggleSidebar, onOpenEditModal, onOpenAdmin, on
         {editMode ? (
           <>
             <Edit className="w-3 h-3" />
-            EDIT MODE{editor ? ` · ${EDITOR_ROLE_LABELS[editor]?.split(' ')[0] || ''}` : ''}
+            EDIT MODE{role ? ` · ${EDITOR_ROLE_LABELS[role]?.split(' ')[0] || ''}` : ''}
           </>
         ) : (
           <>
@@ -85,7 +85,7 @@ export function TopBar({ ship, onToggleSidebar, onOpenEditModal, onOpenAdmin, on
       ) : (
         <button
           type="button"
-          onClick={onOpenEditModal}
+          onClick={onEnableEdit}
           className="btn-warning px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
         >
           <Edit className="w-3.5 h-3.5" />
@@ -95,10 +95,10 @@ export function TopBar({ ship, onToggleSidebar, onOpenEditModal, onOpenAdmin, on
 
       <button
         type="button"
-        onClick={onOpenAdmin}
+        onClick={onOpenSettings}
         className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
-        aria-label="Admin panel"
-        title="Admin"
+        aria-label="Settings"
+        title="Settings"
       >
         <Settings className="w-4 h-4" style={{ color: 'var(--color-dim)' }} />
       </button>
@@ -116,7 +116,7 @@ export function TopBar({ ship, onToggleSidebar, onOpenEditModal, onOpenAdmin, on
 
       <button
         type="button"
-        onClick={logout}
+        onClick={endSession}
         className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
         aria-label="Sign out / switch ship"
         title="Sign out"

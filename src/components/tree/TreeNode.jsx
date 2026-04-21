@@ -10,6 +10,7 @@
 //     └ Voyage End (⚑)        — only when voyage.voyageEnd is set
 
 import { useVoyageStore } from '../../hooks/useVoyageStore';
+import { voyageRouteLabel } from '../../domain/factories';
 
 function isSel(selected, match) {
   if (!selected) return false;
@@ -49,7 +50,7 @@ export function TreeNode({ entry }) {
           {chev(open)}
         </span>
         <span className="tree-icon">⚓</span>
-        <span className="flex-1 truncate">{entry.name || entry.filename}</span>
+        <span className="flex-1 truncate">{voyageRouteLabel(entry)}</span>
         {entry.ended && (
           <span
             className="text-[0.55rem] font-bold px-1.5 py-0.5 rounded"

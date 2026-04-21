@@ -178,6 +178,17 @@ h1, h2, h3, h4, h5, h6, .font-display { font-family: 'Manrope', sans-serif; }
 }
 
 /* ═══ BUTTONS ═══ */
+.btn-primary,
+.btn-flat,
+.btn-warning,
+.btn-danger,
+.btn-success { cursor: pointer; }
+.btn-primary:disabled,
+.btn-flat:disabled,
+.btn-warning:disabled,
+.btn-danger:disabled,
+.btn-success:disabled { cursor: not-allowed; }
+
 .btn-primary {
   background: var(--color-ocean-500);
   color: white;
@@ -441,59 +452,103 @@ h1, h2, h3, h4, h5, h6, .font-display { font-family: 'Manrope', sans-serif; }
   flex: none;
 }
 
-/* ═══ CATEGORY CARDS (Cruise Summary) ═══ */
+/* ═══ CATEGORY CARDS — Stratified dashboard (8px top bar · title strip · tinted body) ═══ */
 .cat-card {
   border-radius: 12px;
   overflow: hidden;
   position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: transform 0.2s ease, box-shadow 0.25s ease;
+  animation: slideUp 0.35s ease-out both;
 }
-.cat-card::before {
+.cat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+.cat-card::after {
   content: '';
   position: absolute;
-  top: 0; bottom: 0; left: 0;
-  width: 6px;
+  top: 0; left: 0; right: 0;
+  height: 8px;
 }
 .cat-label {
+  background: var(--color-surface2);
+  border-bottom: 1px solid var(--color-border-subtle);
   font-size: 0.55rem;
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  padding: 0.6rem 1rem 0.3rem 1.25rem;
+  padding: 0.75rem 1rem 0.55rem 1rem;
+  margin-top: 8px;               /* clears the top bar */
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.cat-body { padding: 0.4rem 1rem 0.85rem 1.25rem; }
+.cat-body { padding: 0.9rem 1rem 1rem 1rem; }
 
-.cat-card.fuel { background: var(--color-hfo-light); border: 1px solid var(--color-hfo-border); }
-.cat-card.fuel::before { background: linear-gradient(var(--color-hfo-band), var(--color-mgo-band), var(--color-lsfo-band)); width: 8px; }
-.cat-card.fuel .cat-label { color: var(--color-hfo); }
-.dark .cat-card.fuel { background: rgba(217,119,6,0.08); border-color: rgba(217,119,6,0.2); }
-.dark .cat-card.fuel .cat-label { color: var(--color-hfo-band); }
+/* Tint lives on the card itself so it fills the full card height, even when a
+   sibling in the same grid row is taller (e.g. single-input Fresh Water next
+   to a 3-row Fuel R.O.B.). The `.cat-label` title strip keeps `--color-surface2`
+   as an opaque rail between the top bar and the tinted body. */
 
-.cat-card.water { background: var(--color-water-light); border: 1px solid var(--color-water-border); }
-.cat-card.water::before { background: var(--color-water-band); }
+/* Fuel — solid navy bar, faint cool body tint */
+.cat-card.fuel { background: rgba(15,23,42,0.035); }
+.cat-card.fuel::after { background: #0F172A; }
+.cat-card.fuel .cat-label { color: #0F172A; }
+.dark .cat-card.fuel { background: rgba(203,213,225,0.04); }
+.dark .cat-card.fuel::after { background: #CBD5E1; }
+.dark .cat-card.fuel .cat-label { color: #CBD5E1; }
+
+/* Water */
+.cat-card.water { background: rgba(2,132,199,0.04); }
+.cat-card.water::after { background: var(--color-water-band); }
 .cat-card.water .cat-label { color: var(--color-water); }
-.dark .cat-card.water { background: rgba(2,132,199,0.08); border-color: rgba(2,132,199,0.2); }
+.dark .cat-card.water { background: rgba(56,189,248,0.05); }
 .dark .cat-card.water .cat-label { color: var(--color-water-band); }
 
-.cat-card.chem { background: var(--color-chem-light); border: 1px solid var(--color-chem-border); }
-.cat-card.chem::before { background: var(--color-chem-band); }
+/* Chemicals */
+.cat-card.chem { background: rgba(219,39,119,0.04); }
+.cat-card.chem::after { background: var(--color-chem-band); }
 .cat-card.chem .cat-label { color: var(--color-chem); }
-.dark .cat-card.chem { background: rgba(219,39,119,0.08); border-color: rgba(219,39,119,0.2); }
+.dark .cat-card.chem { background: rgba(244,114,182,0.05); }
 .dark .cat-card.chem .cat-label { color: var(--color-chem-band); }
 
-.cat-card.lube { background: var(--color-lube-light); border: 1px solid var(--color-lube-border); }
-.cat-card.lube::before { background: var(--color-lube-band); }
-.cat-card.lube .cat-label { color: var(--color-lube); }
-.dark .cat-card.lube { background: rgba(234,88,12,0.08); border-color: rgba(234,88,12,0.2); }
+/* Lub-Oil */
+.cat-card.lube { background: rgba(234,88,12,0.04); }
+.cat-card.lube::after { background: var(--color-lube-band); }
+.cat-card.lube .cat-label { color: var(--color-lube-band); }
+.dark .cat-card.lube { background: rgba(251,146,60,0.05); }
 .dark .cat-card.lube .cat-label { color: var(--color-lube-band); }
 
-.cat-card.legs { background: var(--color-surface); border: 1px solid var(--color-border-subtle); }
-.cat-card.legs::before { background: var(--color-ocean-500); }
+/* Legs — neutral, just to stay consistent with the stratified rhythm */
+.cat-card.legs::after { background: var(--color-ocean-500); opacity: 0.55; }
 .cat-card.legs .cat-label { color: var(--color-dim); }
-.dark .cat-card.legs { background: rgba(30,41,59,0.5); border-color: rgba(255,255,255,0.1); }
+
+/* Σ Total pill — centered 4th column of the Totals card */
+.fuel-col-sigma { text-align: center; }
+.fuel-col-sigma .fc-type { color: var(--color-text); }
+.fuel-col-sigma .fc-big {
+  color: var(--color-text);
+  display: inline-block;
+  padding: 0.1rem 0.9rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+    var(--color-surface),
+    color-mix(in srgb, var(--color-ocean-500) 18%, var(--color-surface)));
+  border: 1px solid var(--color-border-subtle);
+}
+.dark .fuel-col-sigma .fc-big {
+  background: linear-gradient(90deg, rgba(30,41,59,0.5), rgba(6,182,212,0.20));
+  border-color: rgba(255,255,255,0.10);
+}
+
+/* Stagger cards inside any .grid wrapper (scoped to .cat-card children). */
+.grid > .cat-card:nth-child(1) { animation-delay:   0ms; }
+.grid > .cat-card:nth-child(2) { animation-delay:  80ms; }
+.grid > .cat-card:nth-child(3) { animation-delay: 160ms; }
+.grid > .cat-card:nth-child(4) { animation-delay: 240ms; }
 
 /* fuel columns */
 .fuel-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }

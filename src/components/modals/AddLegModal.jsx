@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
+import { voyageRouteLabel } from '../../domain/factories';
 import { X } from '../Icons';
 
 export function AddLegModal({ filename, shipClass, onClose }) {
@@ -48,7 +49,7 @@ export function AddLegModal({ filename, shipClass, onClose }) {
     }
   }
 
-  const voyageLabel = voyage?.name || filename;
+  const voyageLabel = voyage ? voyageRouteLabel(voyage) : filename;
 
   return (
     <div className="modal-overlay" onClick={onClose} role="presentation">

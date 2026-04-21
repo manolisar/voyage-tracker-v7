@@ -45,6 +45,7 @@ export function PhaseSection({
   densities,
   showTotals,
   cumulativeTotals, // optional — { engineCumulative, boilerCumulative }
+  readOnly = false,
 }) {
   const handleEqChange = (key, value) => {
     onChange({ ...phase, equipment: { ...phase.equipment, [key]: value } });
@@ -92,21 +93,30 @@ export function PhaseSection({
         <div className="flex items-center gap-2.5 flex-1">
           <span className="text-base">{phaseIcon(phase.type)}</span>
           <span className={phaseTagClass(phase.type)}>{phaseLabel(phase.type)}</span>
-          <input
-            type="text"
-            value={phase.name}
-            onChange={(e) => onChange({ ...phase, name: e.target.value })}
-            placeholder="Enter phase name…"
-            className="phase-title-input"
-            aria-label="Phase name"
-          />
+          {readOnly ? (
+            <span
+              className="phase-title-input"
+              style={{ background: 'transparent', border: '1px solid transparent', cursor: 'default' }}
+            >
+              {phase.name || '\u2014'}
+            </span>
+          ) : (
+            <input
+              type="text"
+              value={phase.name}
+              onChange={(e) => onChange({ ...phase, name: e.target.value })}
+              placeholder="Enter phase name…"
+              className="phase-title-input"
+              aria-label="Phase name"
+            />
+          )}
           {cumulativeTotals && (
             <span className="text-[0.6rem] font-normal" style={{ color: 'var(--color-dim)' }}>
               (Cumulative)
             </span>
           )}
         </div>
-        {canDelete && (
+        {canDelete && !readOnly && (
           <button
             onClick={onDelete}
             className="p-1.5 rounded-lg transition-colors"
@@ -144,6 +154,7 @@ export function PhaseSection({
                 data={phase.equipment?.[def.key] || { start: '', end: '', fuel: def.defaultFuel }}
                 onChange={(v) => handleEqChange(def.key, v)}
                 densities={densities}
+                readOnly={readOnly}
               />
             ))}
           </tbody>
@@ -176,7 +187,16 @@ export function PhaseSection({
             )}
           </div>
 
-          {!isStandby && (
+          {!isStandby && (readOnly ? (
+            phase.remarks ? (
+              <div
+                className="phase-remarks"
+                style={{ fontStyle: 'italic', whiteSpace: 'pre-wrap' }}
+              >
+                {phase.remarks}
+              </div>
+            ) : null
+          ) : (
             <div className="phase-remarks">
               <textarea
                 value={phase.remarks || ''}
@@ -187,7 +207,7 @@ export function PhaseSection({
                 style={{ fontStyle: 'italic', color: 'inherit' }}
               />
             </div>
-          )}
+          ))}
         </>
       )}
     </div>

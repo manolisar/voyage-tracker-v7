@@ -103,13 +103,17 @@ export function defaultVoyageEnd(shipClass) {
   };
 }
 
-// Top-level voyage object stored as one JSON file under data/<shipId>/.
+// Top-level voyage object stored as one JSON file under the ship's folder.
+// `fromPort` / `toPort` are full port objects (not bare codes) so the
+// on-disk record preserves the full UN/LOCODE + name + country even though
+// the filename is truncated to the 3-letter suffix.
 export function defaultVoyage(shipId, shipClass) {
   return {
     id: Date.now(),
     shipId,
     classId: shipClass.id,
-    name: '',                        // route, e.g. "MIA-NAS-MIA"
+    fromPort: { code: '', name: '', country: '', locode: '' },
+    toPort:   { code: '', name: '', country: '', locode: '' },
     startDate: '',
     endDate: '',
     legs: [],
@@ -119,6 +123,22 @@ export function defaultVoyage(shipId, shipClass) {
     version: APP_VERSION,
     filename: null,
   };
+}
+
+// Short route label — used in dense surfaces (tree, modal subtitles).
+export function voyageRouteLabel(voyage) {
+  const a = voyage?.fromPort?.code;
+  const b = voyage?.toPort?.code;
+  if (!a || !b) return '\u2014';
+  return `${a} \u2192 ${b}`;
+}
+
+// Long-form label — used in titles where port names fit.
+export function voyageRouteLongLabel(voyage) {
+  const a = voyage?.fromPort?.name || voyage?.fromPort?.code;
+  const b = voyage?.toPort?.name   || voyage?.toPort?.code;
+  if (!a || !b) return '\u2014';
+  return `${a} \u2192 ${b}`;
 }
 
 // Exported for tests / explicit factories

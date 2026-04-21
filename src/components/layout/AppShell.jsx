@@ -1,106 +1,35 @@
-// AppShell — main authenticated view scaffold.
-// Wires: TopBar, sidebar (VoyageTree), main (DetailPane). Boots the storage
-// adapter:
-//
-//   • If VITE_DATA_REPO is set (e.g. "manolisar/voyage-tracker-data") we use
-//     the GitHub adapter and the user's PAT (admin token) is required for any
-//     network call. View-only with no token still renders the shell but list /
-//     load operations will surface a "Connect to data repo" prompt.
-//   • Otherwise we fall back to the local-file adapter so dev mode without
-//     network still works against /public/data/.
+// AppShell — main view scaffold.
+// Wires: TopBar, sidebar (VoyageTree), main (DetailPane). The storage adapter
+// is installed by VoyageStoreProvider at module load (local File System
+// Access backend, see src/storage/local/).
 
 import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { useSession } from '../../hooks/useSession';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
 import { loadShips, loadShipClass } from '../../domain/shipClass';
-import { setStorageAdapter } from '../../storage/adapter';
-import { localAdapter } from '../../storage/localAdapter';
-import { createGithubAdapter } from '../../storage/github';
 import { VoyageStoreProvider } from '../../contexts/VoyageStoreProvider';
 import { TopBar } from './TopBar';
 import { DetailPane } from './DetailPane';
 import { VoyageTree } from '../tree/VoyageTree';
-import { EditModeModal } from '../auth/EditModeModal';
-import { PatEntryModal } from '../modals/PatEntryModal';
-import { AdminPanel } from '../modals/AdminPanel';
+import { SettingsPanel } from '../modals/SettingsPanel';
 import { NewVoyageModal } from '../modals/NewVoyageModal';
 import { AddLegModal } from '../modals/AddLegModal';
 import { VoyageEndModal } from '../modals/VoyageEndModal';
-import { readRememberedPat } from '../../auth/patStorage';
-import { ConflictModal } from '../modals/ConflictModal';
-import { Eye, Cloud } from '../Icons';
-
-// Read env once at module load. Vite inlines these.
-const DATA_REPO   = import.meta.env?.VITE_DATA_REPO   || '';
-const DATA_BRANCH = import.meta.env?.VITE_DATA_BRANCH || 'main';
-const USE_GITHUB  = !!DATA_REPO;
-
-function parseRepo(slug) {
-  const [owner, repo] = (slug || '').split('/');
-  return owner && repo ? { owner, repo } : null;
-}
-
-// ── Install the storage adapter SYNCHRONOUSLY at module load ──────────────
-// React effects run child-first, so if we set the adapter inside a useEffect
-// the VoyageTree's mount-time listVoyages() call lands BEFORE our effect
-// fires → "Storage adapter not initialized". Install it before any render.
-//
-// The adapter needs a live token + editor role, but those are in React state.
-// Solution: module-level mutables that the AppShell component pokes via
-// effects below. The adapter's getToken/getEditorRole are closures over
-// these, so PAT rotation never requires rebuilding the adapter.
-let currentToken = null;
-let currentEditorRole = 'Other';
-
-if (USE_GITHUB) {
-  const parsed = parseRepo(DATA_REPO);
-  if (parsed) {
-    setStorageAdapter(createGithubAdapter({
-      owner:    parsed.owner,
-      repo:     parsed.repo,
-      branch:   DATA_BRANCH,
-      getToken:      () => currentToken,
-      getEditorRole: () => currentEditorRole,
-    }));
-  } else {
-    console.error('[AppShell] VITE_DATA_REPO must look like "owner/repo"; got', DATA_REPO);
-    setStorageAdapter(localAdapter);
-  }
-} else {
-  // Dev mode without a data-repo env — read from /public/data/.
-  setStorageAdapter(localAdapter);
-}
+import { DeleteVoyageModal } from '../modals/DeleteVoyageModal';
+import { StaleFileModal } from '../modals/StaleFileModal';
+import { Eye } from '../Icons';
 
 export function AppShell() {
-  const { shipId, editMode, editor, adminToken, setAdminPat } = useAuth();
+  const { shipId, editMode, enterEditMode } = useSession();
   const [ship, setShip] = useState(null);
   const [shipClass, setShipClass] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [patModalOpen, setPatModalOpen] = useState(false);
-  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [newVoyageOpen, setNewVoyageOpen] = useState(false);
-  // VoyageDetail opens Add-Leg / End-Voyage modals by setting these to the
-  // target voyage filename; null = closed. Centralizing them in AppShell
-  // keeps the modal lifecycle outside the scrolling detail pane.
   const [addLegFor,   setAddLegFor]   = useState(null);
   const [endVoyageFor, setEndVoyageFor] = useState(null);
+  const [deleteVoyageFor, setDeleteVoyageFor] = useState(null);
 
-  // ── Keep the module-level adapter closures in sync with auth state ─────
-  // The adapter was installed synchronously at module load (above) so that
-  // first-render listVoyages() doesn't race. These effects just feed it the
-  // live token + role. PAT rotation never rebuilds the adapter.
-  useEffect(() => { currentToken = adminToken; }, [adminToken]);
-  useEffect(() => { currentEditorRole = editor; }, [editor]);
-
-  // Re-hydrate a remembered PAT (sessionStorage) on first render.
-  useEffect(() => {
-    if (!USE_GITHUB || adminToken) return;
-    const remembered = readRememberedPat();
-    if (remembered) setAdminPat(remembered);
-  }, [adminToken, setAdminPat]);
-
-  // ── Load ship + class metadata ─────────────────────────────────────────
   useEffect(() => {
     let alive = true;
     if (!shipId) return;
@@ -131,7 +60,37 @@ export function AppShell() {
     [sidebarOpen],
   );
 
-  const needsPat = USE_GITHUB && !adminToken;
+  // Global keyboard shortcuts. `/` focuses the tree search input; Ctrl/Cmd+B
+  // toggles the sidebar. Both are suppressed while the user is typing in an
+  // input/textarea/contenteditable so we don't intercept normal characters.
+  useEffect(() => {
+    const isEditable = (el) => {
+      if (!el) return false;
+      if (el.isContentEditable) return true;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    };
+    const onKey = (e) => {
+      // Ctrl+B / Cmd+B → toggle sidebar (works even while typing)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setSidebarOpen((v) => !v);
+        return;
+      }
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (isEditable(document.activeElement)) return;
+        const el = document.getElementById('tree-search');
+        if (el) {
+          e.preventDefault();
+          if (!sidebarOpen) setSidebarOpen(true);
+          // Defer to next frame so an opening sidebar mounts the input before we focus.
+          requestAnimationFrame(() => el.focus());
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sidebarOpen]);
 
   return (
     <VoyageStoreProvider key={shipId}>
@@ -140,34 +99,10 @@ export function AppShell() {
         <TopBar
           ship={ship}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
-          onOpenEditModal={() => setEditModalOpen(true)}
+          onEnableEdit={enterEditMode}
           onNewVoyage={() => setNewVoyageOpen(true)}
-          onOpenAdmin={() => {
-            // No PAT yet → ask for one. Otherwise open the real Admin Panel.
-            // (When VITE_DATA_REPO is unset entirely we still surface the PAT
-            // modal so the user gets a clear "not connected" message instead
-            // of a silently broken Admin Panel.)
-            if (!USE_GITHUB || !adminToken) setPatModalOpen(true);
-            else setAdminPanelOpen(true);
-          }}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
-
-        {needsPat && (
-          <div
-            className="px-4 py-2 text-xs flex items-center gap-2 border-b shrink-0"
-            style={{
-              background: 'var(--color-warn-bg)',
-              color: 'var(--color-warn-fg)',
-              borderColor: 'var(--color-border-subtle)',
-            }}
-            role="status"
-          >
-            <Cloud className="w-3.5 h-3.5" />
-            <span>
-              Not connected to data repo. <button className="underline font-semibold" onClick={() => setPatModalOpen(true)}>Connect</button> to load voyages.
-            </span>
-          </div>
-        )}
 
         {!editMode && (
           <div
@@ -199,34 +134,18 @@ export function AppShell() {
               shipClass={shipClass}
               onAddLeg={(filename) => setAddLegFor(filename)}
               onEndVoyage={(filename) => setEndVoyageFor(filename)}
+              onDeleteVoyage={(filename) => setDeleteVoyageFor(filename)}
             />
           </main>
         </div>
 
-        {editModalOpen && (
-          <EditModeModal
-            shipDisplayName={ship?.displayName || 'this ship'}
-            onClose={() => setEditModalOpen(false)}
-          />
-        )}
-
-        {patModalOpen && (
-          <PatEntryModal
-            onClose={() => setPatModalOpen(false)}
-            onUnlocked={() => {
-              // Once the user successfully connects, jump straight into the
-              // Admin Panel — that's almost always why they clicked the gear.
-              setAdminPanelOpen(true);
-            }}
-          />
-        )}
-
-        {adminPanelOpen && (
-          <AdminPanel onClose={() => setAdminPanelOpen(false)} />
+        {settingsOpen && (
+          <SettingsPanel shipClass={shipClass} onClose={() => setSettingsOpen(false)} />
         )}
 
         {newVoyageOpen && (
           <NewVoyageModal
+            ship={ship}
             shipClass={shipClass}
             onClose={() => setNewVoyageOpen(false)}
           />
@@ -248,20 +167,30 @@ export function AppShell() {
           />
         )}
 
-        <ConflictModalHost />
+        {deleteVoyageFor && (
+          <DeleteVoyageModal
+            filename={deleteVoyageFor}
+            onClose={() => setDeleteVoyageFor(null)}
+          />
+        )}
+
+        <StaleFileModalHost />
       </div>
     </VoyageStoreProvider>
   );
 }
 
-// ConflictModal needs the VoyageStore context, so it lives below the provider.
-function ConflictModalHost() {
+// StaleFileModal reads the VoyageStore context, so it renders inside it.
+function StaleFileModalHost() {
   const { conflict, reloadFromRemote, forceOverwrite, cancelConflict, voyages } = useVoyageStore();
   if (!conflict) return null;
   const entry = voyages.find((v) => v.filename === conflict.filename);
-  const label = entry ? `${entry.startDate || ''} ${entry.name || ''}`.trim() : null;
+  const routeLabel = entry && entry.fromPort?.code && entry.toPort?.code
+    ? `${entry.fromPort.code} \u2192 ${entry.toPort.code}`
+    : '';
+  const label = entry ? `${entry.startDate || ''} ${routeLabel}`.trim() : null;
   return (
-    <ConflictModal
+    <StaleFileModal
       filename={conflict.filename}
       voyageLabel={label}
       onReload={reloadFromRemote}

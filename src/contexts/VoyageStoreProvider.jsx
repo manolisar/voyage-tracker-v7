@@ -1,47 +1,51 @@
 // VoyageStoreProvider — owns:
 //   - voyage list (the manifest entries from listVoyages)
 //   - lazy cache of fully-loaded voyages keyed by filename
-//   - SHA cache (optimistic-concurrency tokens) keyed by filename
-//   - dirty edit drafts keyed by filename (Phase 5)
+//   - mtime cache (stale-file-check tokens) keyed by filename
+//   - dirty edit drafts keyed by filename
 //   - tree expansion set (filenames that are expanded in the sidebar)
 //   - currently-selected node (filename + which inner node)
-//   - pending conflict (Phase 3) — surfaces ConflictModal
+//   - pending conflict (stale-file case) — surfaces StaleFileModal
 //
 // Re-loads the list whenever shipId changes.
+//
+// Storage adapter lifecycle: installed once at module load against the local
+// (File System Access API) backend. The adapter reads the live session via a
+// module-level getter which this provider keeps pointed at the latest
+// getSessionSnapshot.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { getStorageAdapter, ConflictError } from '../storage/adapter';
-import { safePutDraft, safeDeleteDraft } from '../storage/indexeddb';
+import { useSession } from '../hooks/useSession';
+import { useToast } from '../hooks/useToast';
+import { getStorageAdapter, setStorageAdapter, ConflictError } from '../storage/adapter';
+import { createLocalAdapter } from '../storage/local';
+import { safePutDraft, safeDeleteDraft, getShipSettings } from '../storage/indexeddb';
 import { AUTO_SAVE_DELAY_MS } from '../domain/constants';
 import { calcVoyageTotals } from '../domain/calculations';
 import { defaultVoyage, defaultLeg, defaultVoyageEnd } from '../domain/factories';
 import { VoyageStoreContext } from './VoyageStoreContext';
 
-// Build the on-disk filename from the voyage name + start date:
-//   2026-04-18_Singapore_to_Hong_Kong.json
-// Must survive the path-safety regex `/^[A-Za-z0-9._-]+$/` in contents.js,
-// so we replace anything non-alphanumeric with an underscore and collapse runs.
-function slugify(s) {
-  return (s || '')
-    .normalize('NFKD')
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-    .slice(0, 120);
-}
-function buildFilename(startDate, name) {
-  const slug = slugify(name) || 'voyage';
+// Module-level session getter. Updated on every render below so the adapter's
+// loggedBy stamp always sees the freshest session without needing a rebuild.
+let sessionGetter = () => null;
+setStorageAdapter(createLocalAdapter({ getSession: () => sessionGetter() }));
+
+const CODE_RE = /^[A-Z]{3}$/;
+
+// Filename: <SHIP_CODE>_<startDate>_<fromPort>-<toPort>.json
+// Ship code comes from ships.json (`code` field). Port codes are the 3-letter
+// UN/LOCODE suffix. See CLAUDE.md §3 for the full contract.
+function buildFilename(shipCode, startDate, fromPort, toPort) {
   const date = (startDate || '').trim() || new Date().toISOString().slice(0, 10);
-  return `${date}_${slug}.json`;
+  return `${shipCode}_${date}_${fromPort}-${toPort}.json`;
 }
 
 function manifestEntryFrom(voyage) {
   return {
     filename: voyage.filename,
     id: voyage.id,
-    name: voyage.name || '',
+    fromPort: voyage.fromPort || { code: '', name: '', country: '', locode: '' },
+    toPort:   voyage.toPort   || { code: '', name: '', country: '', locode: '' },
     startDate: voyage.startDate || '',
     endDate: voyage.endDate || '',
     ended: !!voyage.voyageEnd,
@@ -50,57 +54,55 @@ function manifestEntryFrom(voyage) {
 
 // Selection shape:
 //   { filename, kind: 'voyage'|'leg'|'departure'|'arrival'|'voyageReport'|'voyageEnd', legId? }
-// `kind: 'voyage'` => the Voyage Detail node
-// `kind: 'leg'`    => the leg header (no detail, just a focusable container)
-// others           => specific report nodes inside a leg.
 
 function emptySelection() { return null; }
 
 export function VoyageStoreProvider({ children }) {
-  const { shipId } = useAuth();
+  const { shipId, getSessionSnapshot } = useSession();
+  const { addToast } = useToast();
+  // One toast per outage — don't spam the user for every burst-save retry.
+  const offlineNotifiedRef = useRef(false);
+  // Keep the module-level session getter pointing at the live one. Done in an
+  // effect (not render) to satisfy the react-hooks purity rule; the adapter
+  // only invokes getSession inside saveVoyage which always runs after mount.
+  useEffect(() => { sessionGetter = getSessionSnapshot; }, [getSessionSnapshot]);
 
-  const [voyages, setVoyages] = useState([]);     // manifest entries
-  const [loadedById, setLoadedById] = useState({}); // { [filename]: voyageObj }  (last clean snapshot)
-  const [shaById, setShaById] = useState({});      // { [filename]: githubSha }
-  const [drafts, setDrafts] = useState({});         // { [filename]: voyageObj }  (working copy when dirty)
-  const [dirty, setDirty] = useState(() => new Set()); // filenames with unsaved edits
-  const [saving, setSaving] = useState(() => new Set()); // filenames currently being saved
-  const [loadingFiles, setLoadingFiles] = useState({}); // { [filename]: true }
+  const [voyages, setVoyages] = useState([]);            // manifest entries
+  const [loadedById, setLoadedById] = useState({});      // { [filename]: voyageObj }  (last clean snapshot)
+  const [mtimeById, setMtimeById] = useState({});        // { [filename]: File.lastModified }
+  const [drafts, setDrafts] = useState({});              // { [filename]: voyageObj }  (working copy when dirty)
+  const [dirty, setDirty] = useState(() => new Set());
+  const [saving, setSaving] = useState(() => new Set());
+  const [loadingFiles, setLoadingFiles] = useState({});
   const [expanded, setExpanded] = useState(() => new Set());
   const [selected, setSelected] = useState(emptySelection);
-  const [filter, setFilter] = useState('all'); // 'active' | 'ended' | 'all'
+  const [filter, setFilter] = useState('active');
   const [search, setSearch] = useState('');
   const [listError, setListError] = useState(null);
   const [listLoading, setListLoading] = useState(false);
-  // Pending conflict, surfaces <ConflictModal>. Shape: { filename } or null.
+  // Pending conflict surfaces <StaleFileModal>. `currentVoyage` is populated
+  // when the StaleFileError already read the on-disk copy, so "Reload" can
+  // apply it without a second round-trip.
   const [conflict, setConflict] = useState(null);
-  // Manual carry-over source. Set whenever the user enters an END value in a
-  // phase's equipment row. Shape:
-  //   { filename, legId, kind: 'departure'|'arrival', phaseId, phaseName,
-  //     equipment: { [equipKey]: endValue } }
   const [lastEditedPhase, setLastEditedPhase] = useState(null);
 
   // One pending-save timer per filename.
   const saveTimers = useRef(new Map());
-  // Per-filename "save currently in flight" flag. Used to serialize saves so
-  // that a debounce timer that fires while the previous save hasn't returned
-  // yet doesn't PUT with the stale sha (which would 409 → ConflictModal).
+  // Per-filename "save currently in flight" flag. Serializes saves so that a
+  // debounce timer firing while the previous save hasn't returned doesn't
+  // re-enter with a stale mtime.
   const inFlight = useRef(new Set());
   // Trampoline ref so the in-flight reschedule always calls the latest
-  // `flushSave` — avoids a self-referential useCallback + stale-closure lint
-  // error when we `setTimeout(() => flushSave(...), 250)` from inside flushSave.
+  // `flushSave` without a self-referential useCallback + stale-closure lint.
   const flushSaveRef = useRef(null);
-  // Mirror of `voyages` for access inside async callbacks (flushSave), which
-  // can't rely on closed-over state because they run after the save round-trip.
   const voyagesRef = useRef(voyages);
   useEffect(() => { voyagesRef.current = voyages; }, [voyages]);
-  // Same pattern for shaById: autosave timers capture `flushSave` at schedule
+  // Same pattern for mtimeById: autosave timers capture `flushSave` at schedule
   // time, so during a quick burst of edits timer-B's closure still sees the
-  // stale sha from BEFORE timer-A's save returned. Reading from a ref
-  // sidesteps the race so every save uses the freshest sha we know about.
-  const shaByIdRef = useRef(shaById);
-  useEffect(() => { shaByIdRef.current = shaById; }, [shaById]);
-  // Same for drafts — flushSave needs the latest draft, not a stale snapshot.
+  // mtime from BEFORE timer-A's save returned. Reading from a ref sidesteps
+  // the race so every save uses the freshest mtime we know about.
+  const mtimeByIdRef = useRef(mtimeById);
+  useEffect(() => { mtimeByIdRef.current = mtimeById; }, [mtimeById]);
   const draftsRef = useRef(drafts);
   useEffect(() => { draftsRef.current = drafts; }, [drafts]);
 
@@ -123,10 +125,7 @@ export function VoyageStoreProvider({ children }) {
   }, [shipId]);
 
   // Load manifest on mount. The provider is `key`'d on shipId by AppShell, so
-  // a ship switch unmounts/remounts this provider with fresh state — no reset
-  // effect is needed. This is a legitimate "fetch on mount" side effect; the
-  // setState calls happen INSIDE the async refreshList, not synchronously in
-  // the effect body, but the lint rule still flags it. Disable narrowly.
+  // a ship switch unmounts/remounts this provider with fresh state.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refreshList(); }, [refreshList]);
 
@@ -137,9 +136,9 @@ export function VoyageStoreProvider({ children }) {
     if (loadingFiles[filename]) return null;
     setLoadingFiles((s) => ({ ...s, [filename]: true }));
     try {
-      const { voyage, sha } = await getStorageAdapter().loadVoyage(shipId, filename);
+      const { voyage, mtime } = await getStorageAdapter().loadVoyage(shipId, filename);
       setLoadedById((s) => ({ ...s, [filename]: voyage }));
-      if (sha) setShaById((s) => ({ ...s, [filename]: sha }));
+      if (mtime != null) setMtimeById((s) => ({ ...s, [filename]: mtime }));
       return voyage;
     } finally {
       setLoadingFiles((s) => {
@@ -151,18 +150,13 @@ export function VoyageStoreProvider({ children }) {
   // ── Editing ──────────────────────────────────────────────────────────────
 
   // Save-now flush. Called by the debounced timer or imperatively.
-  // `forceOverwrite` (default false) drops the prevSha so the next save will
-  // clobber the remote — used by the "Force overwrite" branch of ConflictModal.
+  // `forceOverwrite` drops the prevMtime so the adapter skips the stale-file
+  // check — used by the "Overwrite anyway" branch of StaleFileModal.
   const flushSave = useCallback(async (filename, { forceOverwrite = false } = {}) => {
-    // Read draft + sha from refs, not closures. Autosave timers capture
-    // `flushSave` at schedule time; during a fast edit burst the old closure
-    // could otherwise PUT with a sha that's already been superseded by a
-    // still-in-flight save. That would manifest as a spurious conflict modal.
     const draft = draftsRef.current[filename];
     if (!draft) return;
-    // If a save is already in flight for this file, don't overlap — reschedule
-    // ourselves once that save returns. Otherwise two PUTs would race with the
-    // same stale sha and one would 409. See scheduleSave below.
+    // If a save is already in flight for this file, reschedule; otherwise two
+    // writes would race and the second would trip the stale-file check.
     if (inFlight.current.has(filename)) {
       const timers = saveTimers.current;
       if (timers.has(filename)) clearTimeout(timers.get(filename));
@@ -179,11 +173,14 @@ export function VoyageStoreProvider({ children }) {
     });
     try {
       const stamped = { ...draft, lastModified: new Date().toISOString() };
-      const prevSha = forceOverwrite ? null : (shaByIdRef.current[filename] || null);
-      const { sha } = await getStorageAdapter().saveVoyage(shipId, filename, stamped, prevSha);
+      const prevMtime = forceOverwrite ? null : (mtimeByIdRef.current[filename] ?? null);
+      const { mtime } = await getStorageAdapter().saveVoyage(shipId, filename, stamped, prevMtime);
+      // Clear the "already warned about offline" latch so a future outage
+      // gets its own toast.
+      offlineNotifiedRef.current = false;
       // Promote draft → loaded snapshot, clear dirty + offline cache.
       setLoadedById((s) => ({ ...s, [filename]: stamped }));
-      if (sha) setShaById((s) => ({ ...s, [filename]: sha }));
+      if (mtime != null) setMtimeById((s) => ({ ...s, [filename]: mtime }));
       setDrafts((d) => {
         const n = { ...d }; delete n[filename]; return n;
       });
@@ -193,14 +190,14 @@ export function VoyageStoreProvider({ children }) {
       });
       safeDeleteDraft(shipId, filename);
 
-      // Manifest sync: if any manifest-level field changed (name / dates /
+      // Manifest sync: if any manifest-level field changed (ports / dates /
       // ended), upsert _index.json and refresh our local `voyages` state.
-      // Fire-and-forget — a failed index write isn't fatal; the next listing
-      // will fall back to directory enumeration.
+      // No-op on the local adapter (see storage/local/voyages.js) but cheap.
       const freshEntry = manifestEntryFrom(stamped);
       const existing = voyagesRef.current.find((v) => v.filename === filename);
       const manifestChanged = !existing
-        || existing.name !== freshEntry.name
+        || existing.fromPort?.code !== freshEntry.fromPort.code
+        || existing.toPort?.code   !== freshEntry.toPort.code
         || existing.startDate !== freshEntry.startDate
         || existing.endDate !== freshEntry.endDate
         || !!existing.ended !== freshEntry.ended;
@@ -213,19 +210,34 @@ export function VoyageStoreProvider({ children }) {
         const upsert = getStorageAdapter().upsertIndex;
         if (typeof upsert === 'function') {
           upsert(shipId, filename, freshEntry).catch((err) =>
-            console.warn('[VoyageStore] _index.json upsert failed (non-fatal)', err),
+            console.warn('[VoyageStore] _index upsert failed (non-fatal)', err),
           );
         }
       }
     } catch (e) {
       if (e instanceof ConflictError) {
-        // Surface the modal — don't auto-resolve.
-        setConflict({ filename });
+        // Stale-file case. StaleFileError carries the on-disk voyage+mtime so
+        // we can skip an extra read when the user picks Reload.
+        setConflict({
+          filename,
+          currentVoyage: e.currentVoyage ?? null,
+          currentMtime:  e.currentMtime ?? null,
+        });
       } else {
-        // Network / rate-limit / auth: keep the draft in IDB so a refresh
-        // doesn't lose work, then re-throw via console.
+        // Network drive unreachable / IO error: keep the draft in IDB so a
+        // refresh doesn't lose work, then log and surface a toast. Only the
+        // first failure per outage pops the toast, so a burst of retries
+        // doesn't spam the user.
         safePutDraft(shipId, filename, draft);
         console.error('[VoyageStore] save failed', filename, e);
+        if (!offlineNotifiedRef.current) {
+          offlineNotifiedRef.current = true;
+          addToast(
+            'Network drive unreachable — drafts saved locally, will retry on next edit.',
+            'warning',
+            6000,
+          );
+        }
       }
     } finally {
       inFlight.current.delete(filename);
@@ -234,11 +246,9 @@ export function VoyageStoreProvider({ children }) {
         const n = new Set(prev); n.delete(filename); return n;
       });
     }
-  }, [shipId]);
-  // Keep the trampoline ref aligned with the current flushSave closure.
+  }, [shipId, addToast]);
   useEffect(() => { flushSaveRef.current = flushSave; }, [flushSave]);
 
-  // Schedule a debounced save for `filename`. Resets the timer on each call.
   const scheduleSave = useCallback((filename) => {
     const timers = saveTimers.current;
     if (timers.has(filename)) clearTimeout(timers.get(filename));
@@ -249,7 +259,6 @@ export function VoyageStoreProvider({ children }) {
     timers.set(filename, t);
   }, [flushSave]);
 
-  // Replace the working copy of a voyage. Marks dirty + schedules autosave.
   const updateVoyage = useCallback((filename, mutator) => {
     if (!filename) return;
     setDrafts((prev) => {
@@ -257,7 +266,6 @@ export function VoyageStoreProvider({ children }) {
       if (!base) return prev;
       const next = typeof mutator === 'function' ? mutator(base) : mutator;
       if (next === base) return prev;
-      // Best-effort offline mirror.
       safePutDraft(shipId, filename, next);
       return { ...prev, [filename]: next };
     });
@@ -268,33 +276,50 @@ export function VoyageStoreProvider({ children }) {
     scheduleSave(filename);
   }, [loadedById, scheduleSave, shipId]);
 
-  // Create a new voyage file. `partial` carries user-supplied fields from the
-  // NewVoyageModal; we fill the rest from the ship-class defaults.
-  //
-  //   partial = { name, startDate, endDate?, shipClass }
-  //
-  // Returns the new filename so callers can select it.
+  // Create a new voyage file. Caller must supply the ship's `code` (from
+  // ships.json) plus embark/disembark port objects picked via PortCombobox.
   const createVoyage = useCallback(async (partial) => {
     if (!shipId) throw new Error('createVoyage: no shipId');
     if (!partial?.shipClass) throw new Error('createVoyage: shipClass required');
-    if (!partial?.name?.trim()) throw new Error('createVoyage: name required');
+    const shipCode = (partial.shipCode || '').toUpperCase();
+    if (!shipCode) throw new Error('createVoyage: shipCode required');
+    const fromPort = partial.fromPort;
+    const toPort   = partial.toPort;
+    if (!CODE_RE.test(fromPort?.code || '')) throw new Error('createVoyage: embarkation port code must be 3 uppercase letters');
+    if (!CODE_RE.test(toPort?.code || ''))   throw new Error('createVoyage: disembarkation port code must be 3 uppercase letters');
+    if (!partial.startDate) throw new Error('createVoyage: startDate required');
 
-    const filename = buildFilename(partial.startDate, partial.name);
+    const filename = buildFilename(shipCode, partial.startDate, fromPort.code, toPort.code);
+    if (voyagesRef.current.some((v) => v.filename === filename)) {
+      throw new Error(
+        `A voyage from ${fromPort.code} to ${toPort.code} starting ${partial.startDate} already exists for this ship.`,
+      );
+    }
     const base = defaultVoyage(shipId, partial.shipClass);
+    // Per-ship density overrides edited from Settings live in IDB. Apply on
+    // top of the shipClass baseline so crew tweaks (e.g. a ship that's been
+    // burning a different HFO cut for a month) flow into every new voyage.
+    const settings = await getShipSettings(shipId);
+    const densities = {
+      ...base.densities,
+      ...(settings?.defaultDensities || {}),
+    };
     const voyage = {
       ...base,
-      name: partial.name.trim(),
+      fromPort: { ...fromPort },
+      toPort:   { ...toPort },
       startDate: partial.startDate || '',
       endDate: partial.endDate || '',
+      densities,
       filename,
       lastModified: new Date().toISOString(),
     };
 
-    // Brand-new file → no prevSha. GitHub returns 409 if the file already
-    // exists under that name, which ConflictError surfaces to the caller.
-    const { sha } = await getStorageAdapter().saveVoyage(shipId, filename, voyage, null);
+    // Brand-new file → no prevMtime. The adapter also rejects the write if a
+    // file with this name already exists on disk (covers cross-session races).
+    const { mtime } = await getStorageAdapter().saveVoyage(shipId, filename, voyage, null);
     setLoadedById((s) => ({ ...s, [filename]: voyage }));
-    if (sha) setShaById((s) => ({ ...s, [filename]: sha }));
+    if (mtime != null) setMtimeById((s) => ({ ...s, [filename]: mtime }));
 
     const entry = manifestEntryFrom(voyage);
     setVoyages((list) => {
@@ -302,15 +327,13 @@ export function VoyageStoreProvider({ children }) {
       return [...without, entry].sort((a, b) =>
         (b.startDate || '').localeCompare(a.startDate || ''));
     });
-    // Upsert index; fire-and-forget (directory listing is our safety net).
     const upsert = getStorageAdapter().upsertIndex;
     if (typeof upsert === 'function') {
       upsert(shipId, filename, entry).catch((err) =>
-        console.warn('[VoyageStore] _index.json upsert failed (non-fatal)', err),
+        console.warn('[VoyageStore] _index upsert failed (non-fatal)', err),
       );
     }
 
-    // Expand + select the new voyage so the user lands on its detail page.
     setExpanded((prev) => {
       const next = new Set(prev); next.add(filename); return next;
     });
@@ -318,7 +341,43 @@ export function VoyageStoreProvider({ children }) {
     return filename;
   }, [shipId]);
 
-  // Discard local edits.
+  // Delete a voyage permanently. Destructive; callers show a confirmation.
+  // Cancels any pending save timer, drops the file from the adapter, and
+  // purges every local cache keyed by this filename (loaded snapshot, mtime,
+  // draft, dirty flag, expansion, selection, IDB draft).
+  const deleteVoyage = useCallback(async (filename) => {
+    if (!shipId || !filename) return;
+    // Cancel pending saves first — no point saving something we're deleting.
+    const timers = saveTimers.current;
+    if (timers.has(filename)) { clearTimeout(timers.get(filename)); timers.delete(filename); }
+    try {
+      await getStorageAdapter().deleteVoyage(shipId, filename);
+    } catch (e) {
+      // Not-found is fine — some other tab already removed it; proceed with
+      // local cleanup so the UI reflects reality.
+      if (e?.name !== 'NotFoundError') throw e;
+    }
+    setVoyages((list) => list.filter((v) => v.filename !== filename));
+    setLoadedById((s) => { const n = { ...s }; delete n[filename]; return n; });
+    setMtimeById((s) => { const n = { ...s }; delete n[filename]; return n; });
+    setDrafts((d) => { const n = { ...d }; delete n[filename]; return n; });
+    setDirty((prev) => {
+      if (!prev.has(filename)) return prev;
+      const n = new Set(prev); n.delete(filename); return n;
+    });
+    setExpanded((prev) => {
+      const next = new Set();
+      for (const k of prev) {
+        if (k === filename) continue;
+        if (typeof k === 'string' && k.startsWith(`${filename}::`)) continue;
+        next.add(k);
+      }
+      return next;
+    });
+    setSelected((sel) => (sel?.filename === filename ? null : sel));
+    safeDeleteDraft(shipId, filename);
+  }, [shipId]);
+
   const discardDraft = useCallback((filename) => {
     const timers = saveTimers.current;
     if (timers.has(filename)) { clearTimeout(timers.get(filename)); timers.delete(filename); }
@@ -333,16 +392,25 @@ export function VoyageStoreProvider({ children }) {
     safeDeleteDraft(shipId, filename);
   }, [shipId]);
 
-  // ── Conflict resolution helpers (used by ConflictModal) ─────────────────
+  // ── Conflict resolution helpers (used by StaleFileModal) ────────────────
 
   const reloadFromRemote = useCallback(async () => {
-    const filename = conflict?.filename;
-    if (!filename) return;
-    // Drop the local draft and refetch.
+    const entry = conflict;
+    if (!entry?.filename) return;
+    const { filename, currentVoyage, currentMtime } = entry;
     discardDraft(filename);
-    setLoadedById((s) => { const n = { ...s }; delete n[filename]; return n; });
-    setShaById((s) => { const n = { ...s }; delete n[filename]; return n; });
     setConflict(null);
+
+    // Optimization: StaleFileError already read the on-disk file when it
+    // detected the conflict. Use that payload directly instead of another
+    // round-trip. Fall back to a fresh load if the error didn't include it.
+    if (currentVoyage) {
+      setLoadedById((s) => ({ ...s, [filename]: currentVoyage }));
+      if (currentMtime != null) setMtimeById((s) => ({ ...s, [filename]: currentMtime }));
+      return;
+    }
+    setLoadedById((s) => { const n = { ...s }; delete n[filename]; return n; });
+    setMtimeById((s) => { const n = { ...s }; delete n[filename]; return n; });
     await loadVoyage(filename);
   }, [conflict, discardDraft, loadVoyage]);
 
@@ -355,7 +423,6 @@ export function VoyageStoreProvider({ children }) {
 
   const cancelConflict = useCallback(() => setConflict(null), []);
 
-  // Cleanup any pending timers when this provider unmounts (ship switch).
   useEffect(() => {
     const timers = saveTimers.current;
     return () => {
@@ -384,8 +451,6 @@ export function VoyageStoreProvider({ children }) {
     });
   }, []);
 
-  // Expand every voyage in the current list (top level). Leg-level expansion
-  // stays user-driven — legs aren't known until the voyage is loaded.
   const expandAll = useCallback(() => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -398,24 +463,14 @@ export function VoyageStoreProvider({ children }) {
     setExpanded(new Set());
   }, []);
 
-  // Select + auto-expand the parent voyage so the user always sees the path.
   const select = useCallback(async (sel) => {
     setSelected(sel);
     if (sel?.filename) {
       expand(sel.filename);
-      // Pre-load the voyage if we don't have it yet (don't block the UI).
       if (!loadedById[sel.filename]) loadVoyage(sel.filename);
     }
   }, [expand, loadedById, loadVoyage]);
 
-  // Add a new leg to a voyage. Options:
-  //   shipClass      — required, factories use it for default equipment keys
-  //   fromPort       — prefills leg.departure.port
-  //   toPort         — prefills leg.arrival.port
-  //   depDate        — prefills leg.departure.date
-  //   arrDate        — prefills leg.arrival.date
-  //   carryOverFrom  — a previous leg to copy equipment END → new leg's
-  //                    departure START + arrival START (matches v6 behavior).
   const addLeg = useCallback((filename, {
     shipClass,
     fromPort = '',
@@ -432,8 +487,6 @@ export function VoyageStoreProvider({ children }) {
     if (arrDate)  leg.arrival.date   = arrDate;
 
     if (carryOverFrom?.arrival?.phases) {
-      // Copy last-phase `end` counters from the previous leg's arrival into
-      // the new leg's departure + arrival starts, per v6's carry-over rule.
       const srcPhases = carryOverFrom.arrival.phases;
       const srcLast = srcPhases[srcPhases.length - 1];
       if (srcLast?.equipment) {
@@ -449,8 +502,6 @@ export function VoyageStoreProvider({ children }) {
     }
 
     updateVoyage(filename, (v) => ({ ...v, legs: [...(v.legs || []), leg] }));
-    // Expand the new leg so the user can see Dep/Arr right away, and select
-    // its Departure — that's almost always the next field they'll edit.
     const key = `${filename}::${leg.id}`;
     setExpanded((prev) => {
       const next = new Set(prev); next.add(key); next.add(filename); return next;
@@ -459,12 +510,6 @@ export function VoyageStoreProvider({ children }) {
     return leg.id;
   }, [updateVoyage]);
 
-  // End a voyage. Writes voyage.voyageEnd + voyage.endDate, which triggers a
-  // manifest sync inside flushSave. Also computes the "Verified Totals"
-  // snapshot (fuel MT by type, sum of all arrival freshWater.consumption)
-  // so the Voyage End detail page has stable audit numbers baked in at
-  // close time — the rest of the voyage graph could drift after, these
-  // numbers represent the state AT close.
   const endVoyage = useCallback((filename, {
     shipClass,
     endDate = '',
@@ -475,9 +520,7 @@ export function VoyageStoreProvider({ children }) {
     if (!shipClass) throw new Error('endVoyage: shipClass required');
     const nowDate = endDate || new Date().toISOString().slice(0, 10);
     updateVoyage(filename, (v) => {
-      // Snapshot fuel totals across all legs using the voyage's densities.
       const fuel = calcVoyageTotals(v, shipClass);
-      // Sum freshwater consumption recorded on each leg's arrival report.
       let freshWaterCons = 0;
       for (const leg of v.legs || []) {
         const fw = parseFloat(leg.arrival?.freshWater?.consumption);
@@ -499,8 +542,6 @@ export function VoyageStoreProvider({ children }) {
             lsfo: fuel.lsfo,
             freshWaterCons,
           },
-          // Snapshot the densities in effect at close so later density edits
-          // don't retroactively change what the verified totals mean.
           densitiesAtClose: v.densities || base.densitiesAtClose,
         },
       };
@@ -509,25 +550,13 @@ export function VoyageStoreProvider({ children }) {
   }, [updateVoyage]);
 
   // ── Manual carry-over (phase END → next phase START) ──────────────────
-  // v7 keeps v6's manual-only model: the engineer edits END counters in a
-  // phase, then clicks FloatingCarryOverButton → ManualCarryOverModal to push
-  // selected values into the next phase's START.
-  //
-  // trackPhaseEnd — called from DetailPane when it detects that an equipment
-  // .end field changed. Stamps `lastEditedPhase` so the floating button knows
-  // where the carry-over is coming from.
   const trackPhaseEnd = useCallback((source) => {
     if (!source) { setLastEditedPhase(null); return; }
     setLastEditedPhase(source);
   }, []);
 
-  // Walk: within-report next phase → dep→arrival within same leg → arrival
-  // of leg N → departure of leg N+1. Returns a "target" descriptor for the
-  // modal (or null when there is no next phase).
   const findNextPhaseFor = useCallback((source) => {
     if (!source) return null;
-    // Use drafts/loadedById directly — effectiveById is declared below us and
-    // would trip TDZ if we referenced it here.
     const v = drafts[source.filename] || loadedById[source.filename];
     if (!v) return null;
     const legIdx = v.legs.findIndex((l) => l.id === source.legId);
@@ -546,15 +575,12 @@ export function VoyageStoreProvider({ children }) {
       phaseName: destPhase.name || (destKind === 'departure' ? 'Departure Phase' : 'Arrival Phase'),
     });
 
-    // Next phase within the same report.
     if (phaseIdx < report.phases.length - 1) {
       return buildTarget(leg.id, source.kind, report.phases[phaseIdx + 1]);
     }
-    // Departure → first arrival phase of the same leg.
     if (source.kind === 'departure' && leg.arrival?.phases?.length > 0) {
       return buildTarget(leg.id, 'arrival', leg.arrival.phases[0]);
     }
-    // Arrival (last phase) → first departure phase of the next leg.
     if (source.kind === 'arrival' && legIdx < v.legs.length - 1) {
       const nextLeg = v.legs[legIdx + 1];
       const destPhase = nextLeg?.departure?.phases?.[0];
@@ -563,8 +589,6 @@ export function VoyageStoreProvider({ children }) {
     return null;
   }, [drafts, loadedById]);
 
-  // applyCarryOver — copy the chosen END values into `target`'s phase START
-  // fields. `counters` = { [equipKey]: value }.
   const applyCarryOver = useCallback((target, counters) => {
     if (!target) return;
     const entries = Object.entries(counters || {}).filter(([, v]) => v !== '' && v != null);
@@ -591,56 +615,52 @@ export function VoyageStoreProvider({ children }) {
     setLastEditedPhase(null);
   }, [updateVoyage]);
 
-  // Filtered + searched view of the manifest.
   const visibleVoyages = useMemo(() => {
     const q = search.trim().toLowerCase();
     return voyages.filter((v) => {
       if (filter === 'active' && v.ended) return false;
       if (filter === 'ended'  && !v.ended) return false;
       if (q) {
-        const hay = `${v.name || ''} ${v.startDate || ''} ${v.endDate || ''}`.toLowerCase();
+        const hay = [
+          v.fromPort?.code, v.fromPort?.name, v.fromPort?.locode,
+          v.toPort?.code,   v.toPort?.name,   v.toPort?.locode,
+          v.startDate, v.endDate,
+        ].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
   }, [voyages, filter, search]);
 
-  // Effective voyage data per filename: draft if dirty, else loaded snapshot.
-  // We expose loadedById merged with drafts so consumers reading
-  // `loadedById[filename]` always get the freshest version on screen.
   const effectiveById = useMemo(() => {
     if (!Object.keys(drafts).length) return loadedById;
     return { ...loadedById, ...drafts };
   }, [loadedById, drafts]);
 
   const value = useMemo(() => ({
-    // data
     voyages,
     visibleVoyages,
     loadedById: effectiveById,
     loadingFiles,
     listLoading,
     listError,
-    // editing
     dirty,
     saving,
     updateVoyage,
     createVoyage,
     addLeg,
     endVoyage,
+    deleteVoyage,
     discardDraft,
     flushSave,
-    // carry-over
     lastEditedPhase,
     trackPhaseEnd,
     findNextPhaseFor,
     applyCarryOver,
-    // conflict
     conflict,
     reloadFromRemote,
     forceOverwrite,
     cancelConflict,
-    // selection / expansion
     selected,
     expanded,
     select,
@@ -648,15 +668,13 @@ export function VoyageStoreProvider({ children }) {
     expand,
     expandAll,
     collapseAll,
-    // queries
     filter, setFilter,
     search, setSearch,
-    // actions
     refreshList,
     loadVoyage,
   }), [
     voyages, visibleVoyages, effectiveById, loadingFiles, listLoading, listError,
-    dirty, saving, updateVoyage, createVoyage, addLeg, endVoyage, discardDraft, flushSave,
+    dirty, saving, updateVoyage, createVoyage, addLeg, endVoyage, deleteVoyage, discardDraft, flushSave,
     lastEditedPhase, trackPhaseEnd, findNextPhaseFor, applyCarryOver,
     conflict, reloadFromRemote, forceOverwrite, cancelConflict,
     selected, expanded, select, toggleExpand, expand, expandAll, collapseAll,

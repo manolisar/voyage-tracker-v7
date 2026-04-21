@@ -7,7 +7,7 @@
 
 ## 1. What this app is
 
-A static SPA used by ECR / Chief Engineers to log fuel + lub-oil consumption per cruise leg. Data lives in a **private GitHub repository**; the app reads/writes JSON files via the Contents API. Git history is the audit log.
+A static SPA used by ECR / Chief Engineers / Bridge OOWs to log fuel + lub-oil consumption per cruise leg. Data is written as **plain JSON files to a per-ship network folder** (e.g. `Z:\voyage-tracker\solstice\`) via the browser's **File System Access API**. No backend, no cloud, no database — the app is a static bundle hosted on GitHub Pages that reads and writes the ship's own network share directly. Every save stamps a `loggedBy` attribution block (name + role + timestamp); access control is the Windows/SMB share ACL (see §4).
 
 **Fleet (all Solstice-class, identical engine/boiler plant):**
 
@@ -25,80 +25,91 @@ A static SPA used by ECR / Chief Engineers to log fuel + lub-oil consumption per
 
 - **React 19** + **Vite 7**
 - **Tailwind CSS 4** (CSS-first config; theme tokens in `src/styles/app.css`)
-- **GitHub Contents API** for storage (no backend, no server)
-- **WebCrypto** for PIN hashing (PBKDF2-SHA256, 310k iter)
+- **File System Access API** for storage (per-ship network folder; handles persisted in IndexedDB)
+- **IndexedDB** for: directory handles, session (`shipId`/`userName`/`role`), draft cache
 - Deployment: GitHub Pages (static)
 
-No backend. No database. No serverless functions. The entire app is a static bundle that talks to one private GitHub data repo.
+No backend. No database. No serverless functions. No auth servers. The entire app is a static bundle that writes JSON files to the ECR PC's mapped network drive.
+
+**Browser requirement:** Chromium-based (Chrome, Edge, Brave). The File System Access API is not supported in Firefox or Safari; the landing screen detects this and shows a clear "use Chrome or Edge" message instead of crashing.
 
 ---
 
 ## 3. Storage model
 
-**Two repos:**
-1. `voyage-tracker-v7` — app code + GitHub Pages deploy.
-2. `voyage-tracker-data` (PRIVATE) — JSON data + auth config.
+Each ship owns a folder on its own network share. The crew selects that folder once per PC (via `showDirectoryPicker`) and the browser remembers the handle in IndexedDB — subsequent launches just re-request permission silently.
 
-**Data repo layout:**
+**Per-ship folder layout:**
 ```
-data/
-├── _config/
-│   └── auth.json                       # per-ship PIN hashes (no PATs stored)
-├── solstice/
-│   ├── 2026-01-15_MIA-NAS-MIA.json
-│   └── 2026-02-04_FLL-CZM-FLL.json
-├── equinox/
-├── eclipse/
-├── silhouette/
-└── reflection/
+Z:\voyage-tracker\solstice\
+├── SL_2026-01-15_MIA-FLL.json
+├── SL_2026-02-04_FLL-CZM.json
+└── …
 ```
 
-**File naming:** `<voyageStartDate>_<route>.json` — e.g. `2026-01-15_MIA-NAS-MIA.json`.
+**File naming:** `<SHIP_CODE>_<voyageStartDate>_<fromPort>-<toPort>.json` — e.g. `SL_2026-01-15_MIA-FLL.json` (Celebrity Solstice, Miami → Fort Lauderdale). Ship codes are the `code` field in [public/ships.json](public/ships.json) (`SL`, `EQ`, `EC`, `SI`, `RF`). Port codes are the 3-letter suffix of the UN/LOCODE (e.g. `USMIA` → `MIA`); the full LOCODE + country + display name are preserved inside the voyage body so the filename's truncation to 3 letters never loses context.
 
-**Conflict handling:** every PUT carries the previous file SHA; GitHub returns 409 on mismatch → app shows `ConflictModal` (Reload remote / Force overwrite / Cancel).
+**File contents:** the voyage JSON plus a `loggedBy` block written on every save. `fromPort` / `toPort` are full objects, not bare strings:
+
+```json
+{
+  "startDate": "2026-01-15",
+  "fromPort": { "code": "MIA", "name": "Miami",           "country": "US", "locode": "USMIA" },
+  "toPort":   { "code": "FLL", "name": "Fort Lauderdale", "country": "US", "locode": "USFLL" },
+  "…": "…",
+  "loggedBy": {
+    "name": "M. Archontakis",
+    "role": "Chief",
+    "at": "2026-04-19T08:14:22.113Z"
+  }
+}
+```
+
+**Port catalog:** the UN/LOCODE-derived catalog lives at [public/ports.json](public/ports.json), built once from the open DataHub UN/LOCODE dump by [scripts/build-ports-catalog.mjs](scripts/build-ports-catalog.mjs) (re-run manually when UN/LOCODE refreshes). The New Voyage modal autocompletes against it via [src/components/ui/PortCombobox.jsx](src/components/ui/PortCombobox.jsx); if the user types an unknown 3-letter code the combobox prompts for name + country inline and persists the entry to IndexedDB under `customPorts/<shipId>` so it shows up in future autocompletes for that ship.
+
+**Adapter contract:** the storage layer lives at `src/storage/local/` and exposes `listVoyages`, `loadVoyage`, `saveVoyage`, `deleteVoyage`, `upsertIndex`. The rest of the app depends on the interface (`src/storage/adapter.js`), not the backend.
+
+**Stale-file check (the minimal safety net):**
+Simultaneous edits to the same file are rare (three roles own mostly disjoint fields — see §4) but not impossible. Instead of full conflict resolution:
+
+1. On load, we remember `file.lastModified` for each voyage.
+2. Before every write, we re-fetch `file.lastModified` from disk.
+3. If it's newer than what we loaded, we pause the save and surface `<StaleFileModal>` with **Reload from disk** / **Overwrite anyway** / **Cancel**.
+
+This is cheap (one `getFile()` call, no full read) and catches the only realistic overlap case on a LAN share. There are no SHAs, no version vectors, no retries.
+
+**Offline fallback:** if the network drive is unreachable (`NotFoundError` / `NotReadableError`), the save is cached in IndexedDB (`src/storage/indexeddb.js`) and flushed on the next successful permission grant.
 
 ---
 
-## 4. Auth model — "Trust the PC + PIN for edit"
+## 4. Access model — "The network share is the boundary"
 
-The data is **not secret** (it's not PII or financial). The threat we defend against is **accidental edits by someone walking up to an unlocked ECR PC**, not exfiltration.
+The data is **not secret** (it's not PII or financial — just fuel counters). Access control is handled by the Windows/SMB ACL on the ship's `voyage-tracker\` share; anyone who can mount the drive can edit the data. Inside the app there is **no PIN, no password, no login, no PAT** — the landing screen asks for ship + name + role purely to stamp `loggedBy` on each save for attribution.
 
-### Read access (View Only)
-- No password. The PC's Windows lock screen IS the access boundary.
-- Anyone who lands on the URL can browse all 5 ships' voyage data read-only.
+### Landing flow (3 steps, one-time per PC)
 
-### Edit access (per-ship PIN)
-- 4-digit PIN per ship — **accident prevention, not security**.
-- User picks ship → enters PIN → picks editor role → can edit only that ship's data.
-- PINs are hashed (PBKDF2) and stored in `data/_config/auth.json`.
-- Editor session: 30-minute idle timeout, then drops back to View Only.
+1. **Pick ship** — 5 tiles for the Solstice-class fleet.
+2. **Identify** — type your name, pick your role (dropdown).
+3. **Folder** — pick the ship's network folder (first time) or reconnect (on reload).
 
-### 4 Editor Roles (recorded in commit trailer, not enforced as permissions)
-| Role                   | Commit trailer        |
-|------------------------|-----------------------|
-| Chief Engineer         | `Editor-Role: Chief`  |
-| 2nd Engineer (ECR)     | `Editor-Role: Second` |
-| Bridge Officer of Watch| `Editor-Role: Bridge` |
-| Other                  | `Editor-Role: Other`  |
+The `FileSystemDirectoryHandle` is stored in IndexedDB (the `handles` object store, keyed by `shipId`). On reload, Chromium auto-grants permission for persisted handles so the picker is skipped; if it reverts to "prompt" state, the landing screen offers a one-click "Reconnect folder" button.
 
-### Admin access (GitHub PAT — Option A)
-- Admin login = paste your GitHub fine-grained PAT into the Admin modal.
-- App calls `GET /user` to verify the token works on the data repo.
-- Token is held **in JS memory only** (or browser password manager autofill if user opts in). Never in localStorage by default; sessionStorage only if user ticks "remember for this tab".
-- **Admin actions:** rotate ship PINs, view recent commits, bootstrap new ships.
-- PAT lifecycle: generated once on github.com (~3 min), reusable until expiry/revocation. Recommend 1-year fine-grained PAT scoped to data repo with `Contents: Read & Write`. Save in password manager.
-- **No separate admin password exists.** Your GitHub account IS the admin credential. Nothing leaks server-side because there is no server.
+### Edit Mode
 
-### Canonical seed PINs (mockup demo values)
-| Ship | PIN  |
-|------|------|
-| SL   | 4815 |
-| EQ   | 2734 |
-| EC   | 7106 |
-| SI   | 5293 |
-| RF   | 8362 |
+A one-click toggle in the top bar flips between **View Only** (default on open) and **Edit Mode**. It exists purely to prevent stray clicks from a passerby at an unlocked ECR PC — it is **not** a security boundary. No PIN unlocks it; the Windows lock screen does the real access control.
 
-These are the **initial PINs** seeded into `auth.json` on first deploy. Admin rotates them after handover to crew.
+### Role partition (who writes what, by convention)
+
+| Role                    | `role` value | Typical writes                                           |
+|-------------------------|--------------|----------------------------------------------------------|
+| Chief Engineer          | `chief`      | Amends anything, closes voyages (End Voyage + lub-oil).  |
+| 2nd Engineer (ECR)      | `second`     | Creates voyages, writes Departure / Arrival fuel data.   |
+| Bridge Officer of Watch | `bridge`     | Writes per-leg Voyage Report (times, distance, speed).   |
+| Other                   | `other`      | Fallback for cadets/relief crew.                         |
+
+Stored role values are the lowercase enum from [`src/domain/constants.js`](src/domain/constants.js) (`EDITOR_ROLES`). The capitalized human labels (`EDITOR_ROLE_LABELS`) are only for display — the TopBar renders the first word of the label (e.g. "Chief") next to the user's name.
+
+Nothing in the app enforces these partitions — they're workflow convention. Any role can write any field; the `loggedBy` stamp on each save records who did it. That's the audit trail.
 
 ---
 
@@ -166,55 +177,67 @@ TopBar:  [☰] Voyage Tracker — Celebrity Solstice    [● Edit Mode | View On
 Carried from v6, refined.
 
 - **Fonts:** Manrope (UI) + IBM Plex Mono (numerics)
-- **Color-coded category cards:** fuel (amber), water (blue), chemicals (green), lube (purple)
+- **Color-coded category cards:** fuel (deep navy `#0F172A`), water (blue), chemicals (pink), lube (orange). Fuel bar is a single solid navy — NOT a tri-color HFO/MGO/LSFO gradient — so the card reads as a single surface even when three fuels are present inside.
 - **Edit Mode badge:** amber pill in top bar
 - **View Only badge:** muted gray pill
 - **Buttons:** `btn-primary` (blue), `btn-warning` (amber for End Voyage / Enable Edit)
 
-**Dark mode** via CSS variable redefinition in `.dark` (architectural, not per-element overrides). Tokens defined:
+### Stratified dashboard motif (report-form summary cards)
+
+Every `.cat-card` renders in three strata, top-down:
+
+1. **8px top bar** (`::after` pseudo-element) — solid per-variant color (navy for fuel, `--color-water-band` for water, etc.). The pennant identity lives here.
+2. **Title strip** — `.cat-label` painted with `--color-surface2` (an opaque cool off-white rail). Separates the top bar from the body with a subtle bottom border.
+3. **Tinted body** — the tint (`rgba(<variant-rgb>, 0.035–0.05)`) lives on `.cat-card` itself, NOT on `.cat-body`. This is load-bearing: cards in the same CSS grid row inherit the tallest sibling's height, and the card-level tint fills that height so short cards (e.g. single-input Fresh Water Bunkered next to three-row Fuel R.O.B.) aren't half-white.
+
+Interaction: `translateY(-3px)` hover lift + `0 8px 24px rgba(0,0,0,0.08)` shadow, mount `@keyframes slideUp` with staggered 80ms delays on `.grid > .cat-card:nth-child(N)`. All motion is auto-disabled under `prefers-reduced-motion: reduce` via the global rule at the top of `app.css`.
+
+Σ Total column on the report-totals card uses `.fuel-col-sigma` (centered, pill-shaped, cyan-tinted gradient) — the first three columns keep the HFO/MGO/LSFO category colors.
+
+### View ↔ edit parity (no two implementations of the same form)
+
+`ReportForm` and `VoyageReportSection` both accept a `readOnly` prop. In read-only mode, each `<input>` is swapped for a static div with `background: transparent; border: 1px solid transparent` — same box model, same typography, same grid layout. The detail-pane wrappers (`ReportDetail`, `VoyageReportDetail`) are 20-line components that render the edit component with `readOnly`. This guarantees toggling Edit Mode doesn't reflow the page and means a single component owns the visual contract for each form.
+
+### Dark mode
+
+Via CSS variable redefinition in `.dark` (architectural, not per-element overrides). Tokens defined:
 - Surface: `--color-bg`, `--color-surface`, `--color-surface2`
 - Text: `--color-text`, `--color-dim`, `--color-faint`
 - Borders: `--color-border-subtle`
 - State: `--color-error-{bg,fg}`, `--color-warn-{bg,fg}`
 - Landing gradient: `--color-landing-bg-{from,mid,to}`
 
-Toggle persists in localStorage; respects `prefers-color-scheme` on first visit.
+Fuel-bar color flips to `#CBD5E1` (chalk) in dark mode so it stays legible against the navy surface. Toggle persists in localStorage; respects `prefers-color-scheme` on first visit.
 
 ---
 
-## 8. Mockup is the spec
+## 8. Mockup is the visual spec (partially superseded)
 
-**`mockup/index.html`** is the canonical visual + behavioral specification.
+**`mockup/index.html`** was the Phase 1 sign-off artifact for layout, typography, color, and the tree/detail pane interaction model — it remains the canonical reference for the visible surface of the app.
 
-It is a single self-contained HTML file (Tailwind via CDN, fake JSON inline, vanilla JS state machine). It demonstrates:
-- Landing screen (ship picker + optional PIN + role + Open)
-- Main view with tree + detail pane
-- Edit Mode toggle, View Only banner
-- All forms (ReportForm with 5 equipment rows × 2 phases, VoyageReportSection with lub-oil)
-- All modals: New Voyage, Add Leg, End Voyage, Enable Edit, Admin Panel, Rotate PIN, Conflict
-- Dark mode
-- Independent pane scrolling
-- PIN auto-advance / OTP-style input behavior
+What the mockup still defines:
+- Main layout (tree + detail + top bar, independent pane scrolling, dark mode).
+- All forms: `ReportForm` (5 equipment rows × 2 phases), `VoyageReportSection` (lub-oil), `CruiseSummary`.
+- Creation modals: New Voyage, Add Leg, End Voyage.
 
-**Implementation MUST match the mockup's structure, copy, spacing, color choices, and interaction patterns** unless a deviation is explicitly approved.
+What the mockup has **superseded** by the local-file pivot:
+- **Landing screen** — the mockup shows a PIN + role picker; real app asks for ship + name + role + folder (no PIN).
+- **Edit Mode overlay** — the mockup gates Edit Mode behind a PIN entry modal; real app is a one-click toggle.
+- **Admin Panel** — gone. Replaced by a plain **Settings** modal (`SettingsPanel`) with Change-folder / Export / Import / Switch-ship.
+- **Conflict modal** — replaced by **`StaleFileModal`** with mtime-drift semantics (Reload from disk / Overwrite anyway / Cancel).
+
+**Implementation MUST match the mockup's structure, copy, spacing, color choices, and interaction patterns for the surfaces that weren't superseded.** When in doubt, ask before diverging.
 
 ---
 
 ## 9. Reuse from v6
 
-Carry these over largely unchanged (refactor to read equipment from class config instead of hardcoded keys):
+Carried over (refactored to read equipment from class config instead of hardcoded keys):
 
-- `src/utils/factories.js`
-- `src/utils/calculations.js`
-- `src/utils/validation.js`
-- `src/utils/constants.js`
-- `src/components/voyage/PhaseSection.jsx`
-- `src/components/voyage/EquipmentRow.jsx`
-- `src/components/voyage/ReportForm.jsx`
-- `src/components/voyage/CruiseSummary.jsx`
-- `src/components/voyage/VoyageReportSection.jsx`
-- All 6 modals in `src/components/modals/`
-- `Icons.jsx` (extend with Lock / Cloud / GitHub / Tree / Anchor / Sail)
+- `src/domain/factories.js`, `calculations.js`, `validation.js`, `constants.js`
+- `src/components/voyage/ReportForm.jsx`, `PhaseSection.jsx`, `EquipmentRow.jsx`, `CruiseSummary.jsx`, `VoyageReportSection.jsx`
+- Creation modals under `src/components/modals/` (New Voyage, Add Leg, End Voyage)
+- `Icons.jsx` (extended with Anchor, Cloud, Folder, Download, Upload, etc.)
 - `app.css` (Signal Flag Bands theme)
 - `ThemeContext`, `ToastContext`
 
@@ -222,32 +245,44 @@ Carry these over largely unchanged (refactor to read equipment from class config
 
 ---
 
-## 10. Project layout (target)
+## 10. Project layout
 
 ```
 Voyage_Tracker_v7/
 ├── CLAUDE.md                           # this file
-├── mockup/                             # Phase 1 sign-off artifact (canonical spec)
+├── AGENTS.md                           # agent onboarding cheatsheet
+├── mockup/                             # Phase 1 visual sign-off artifact
 │   ├── index.html
 │   └── README.md
 ├── public/
 │   ├── ships.json                      # ship roster
+│   ├── ports.json                      # UN/LOCODE seaport catalog (see scripts/build-ports-catalog.mjs)
 │   └── ship-classes/
 │       └── solstice-class.json         # equipment, fuels, densities, phase templates
+├── scripts/
+│   └── build-ports-catalog.mjs         # one-shot: fetch UN/LOCODE dump → filter → write public/ports.json
 ├── src/
-│   ├── auth/                           # crypto, PIN, session, PAT vault, inactivity
 │   ├── storage/
-│   │   └── github/                     # client, contents, commits, errors
-│   ├── domain/                         # factories, calculations, validation, constants
-│   ├── contexts/                       # Theme, Toast, Ship, VoyageStore, Auth
-│   ├── hooks/
+│   │   ├── adapter.js                  # interface + shared error types (StorageError, ConflictError, NotFoundError)
+│   │   ├── indexeddb.js                # IDB helpers: handles, session, draft cache, custom ports
+│   │   └── local/
+│   │       ├── index.js                # adapter install (listVoyages / loadVoyage / saveVoyage / …)
+│   │       ├── fsHandle.js             # directory-handle lifecycle (pick, persist, re-permission)
+│   │       ├── voyages.js              # CRUD against a per-ship folder
+│   │       ├── errors.js               # StaleFileError, NoDirectoryError, UnsupportedBrowserError, PathSafetyError
+│   │       └── exportImport.js         # bundle build / download / parse / import
+│   ├── domain/                         # factories, calculations, validation, constants, ports
+│   ├── contexts/                       # Theme, Toast, Session, VoyageStore
+│   ├── hooks/                          # useTheme, useToast, useSession, useVoyageStore
 │   ├── components/
-│   │   ├── auth/                       # LandingScreen, EditModeModal, AdminPanel
-│   │   ├── layout/                     # AppShell, TopBar, Sidebar, DetailPane
+│   │   ├── auth/                       # AuthGate (session-based router)
+│   │   ├── session/                    # LandingScreen (ship + name + role + folder)
+│   │   ├── layout/                     # AppShell, TopBar, DetailPane
 │   │   ├── tree/                       # VoyageTree, TreeNode, TreeToolbar
-│   │   ├── detail/                     # VoyageDetail, ReportDetail, VoyageReportDetail
-│   │   ├── voyage/                     # ReportForm, PhaseSection, EquipmentRow, …
-│   │   ├── modals/                     # NewVoyage, AddLeg, EndVoyage, Conflict, …
+│   │   ├── detail/                     # VoyageDetail, ReportDetail, VoyageReportDetail, VoyageEndDetail, EmptyState
+│   │   ├── voyage/                     # ReportForm, PhaseSection, EquipmentRow, VoyageReportSection, …
+│   │   ├── modals/                     # NewVoyage, AddLeg, VoyageEnd, DeleteVoyage, StaleFile, Settings, ManualCarryOver
+│   │   ├── ui/                         # PortCombobox, FloatingCarryOverButton, etc.
 │   │   └── Icons.jsx
 │   ├── styles/
 │   │   ├── app.css
@@ -259,15 +294,14 @@ Voyage_Tracker_v7/
 
 ---
 
-## 11. Build phases (going forward)
+## 11. Build phases
 
-1. ~~**Mockup**~~ — DONE. Sign-off complete.
-2. **Scaffold + Auth** — Vite scaffold, carry v6 domain/, build auth module (PIN hash, session, inactivity, PAT vault), `LandingScreen`, `EditModeModal`, `AdminPanel`.
-3. **GitHub Storage** — `storage/github/` modules, conflict handling, commit trailers.
-4. **Tree UI** — `VoyageStoreContext`, `VoyageTree`, `AppShell`, `DetailPane`, hash routing, keyboard nav, dirty guard.
-5. **Reuse v6 forms** — drop in `ReportForm` / `PhaseSection` / `EquipmentRow` / `CruiseSummary` / `VoyageReportSection`, refactor to class config.
-6. **Admin Panel** — full implementation: rotate PINs, view commits, bootstrap ships.
-7. **Deploy** — GitHub Pages workflow, v6 import script, Lighthouse a11y ≥ 95.
+1. ~~**Mockup**~~ — DONE.
+2. ~~**Scaffold + v6 domain carry-over**~~ — DONE.
+3. ~~**Tree UI + forms + creation modals**~~ — DONE (GitHub-backed first cut).
+4. ~~**Local-file pivot**~~ — DONE. Replaced GitHub/PAT/PIN model with File System Access API + per-ship network folder + `loggedBy` attribution.
+5. **One-shot data migration** — pull each ship's voyages from the old `voyage-tracker-data` repo, bundle them per ship, hand the bundles to crew for first-launch import via Settings → Import. Then archive the data repo.
+6. **Deploy polish** — Lighthouse a11y ≥ 95, GitHub Pages deploy smoke test on a Windows PC with a mapped network drive.
 
 ---
 
@@ -275,17 +309,10 @@ Voyage_Tracker_v7/
 
 - **No code changes for new ships of the same class** — drop an entry in `ships.json`, that's it.
 - **No code changes for cosmetic data tweaks** — densities, phase labels, etc. all live in class config JSON.
-- **No backend, ever** — if a feature requires a backend, redesign the feature.
-- **The mockup is the contract** — if implementation diverges from `mockup/index.html`, that's a bug to file, not a freedom to take.
-- **Git history is the audit log** — every save commit carries a structured trailer:
-  ```
-  [solstice] save: 2026-01-15_MIA-NAS-MIA.json
-
-  Voyage: 2026-01-15 MIA-NAS-MIA
-  Editor-Role: Chief
-  App-Version: 7.0.0
-  ```
+- **No backend, ever** — this is now literally true. No PATs, no API keys, no auth servers. The app only talks to the local filesystem via the File System Access API.
+- **The mockup is the visual contract** — see §8 for the surfaces it still governs and the ones that have been superseded by the local-file pivot.
+- **Attribution lives in `loggedBy`** — every voyage file carries the `{ name, role, at }` of whoever last saved it. There is no git-based audit log; the on-disk file *is* the record. Ship IT is responsible for backing up the network share.
 
 ---
 
-*Last updated: 2026-04-17. Maintained alongside `mockup/index.html` — they MUST stay in sync.*
+*Last updated: 2026-04-19. Maintained alongside `mockup/index.html` — visual surfaces must stay in sync; behavior-level deviations documented in §8.*

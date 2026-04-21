@@ -5,12 +5,8 @@
 export const APP_VERSION = '7.0.0';
 export const AUTO_SAVE_DELAY_MS = 1500;
 
-// Idle / inactivity policy
-export const EDIT_SESSION_MS = 30 * 60 * 1000;       // 30 min editor session
-export const INACTIVITY_LOCK_MS = 15 * 60 * 1000;    // 15 min idle -> lock
-export const INACTIVITY_WARN_MS = 14 * 60 * 1000;    // 14 min -> warn
-
-// Editor roles (recorded in commit trailer; not enforced as permissions)
+// Editor roles — recorded in each voyage file's `loggedBy.role` stamp for
+// attribution. Not enforced as permissions (see CLAUDE.md §4).
 export const EDITOR_ROLES = {
   CHIEF:  'chief',
   SECOND: 'second',
@@ -36,8 +32,3 @@ export const REPORT_TYPES = {
   DEPARTURE: 'departure',
   ARRIVAL:   'arrival',
 };
-
-// PBKDF2 params for PIN hashing (auth/passwords.js)
-export const PIN_PBKDF2_ITER = 310000;
-export const PIN_HASH_BYTES = 32;
-export const PIN_SALT_BYTES = 16;
