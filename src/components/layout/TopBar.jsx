@@ -5,9 +5,9 @@
 import { useTheme } from '../../hooks/useTheme';
 import { useSession } from '../../hooks/useSession';
 import { EDITOR_ROLE_LABELS } from '../../domain/constants';
-import { Anchor, Edit, Eye, LogOut, Menu, Moon, Settings, Sun, Unlock } from '../Icons';
+import { Anchor, Edit, Eye, HelpCircle, LogOut, Menu, Moon, Settings, Sun, Unlock } from '../Icons';
 
-export function TopBar({ ship, onToggleSidebar, onEnableEdit, onOpenSettings, onNewVoyage }) {
+export function TopBar({ ship, onToggleSidebar, onEnableEdit, onOpenSettings, onOpenHelp, onNewVoyage }) {
   const { theme, toggleTheme } = useTheme();
   const { editMode, role, exitEditMode, endSession } = useSession();
 
@@ -92,6 +92,16 @@ export function TopBar({ ship, onToggleSidebar, onEnableEdit, onOpenSettings, on
           Enable Edit Mode
         </button>
       )}
+
+      <button
+        type="button"
+        onClick={onOpenHelp}
+        className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+        aria-label="Help"
+        title="Help"
+      >
+        <HelpCircle className="w-4 h-4" style={{ color: 'var(--color-dim)' }} />
+      </button>
 
       <button
         type="button"

@@ -136,7 +136,7 @@ This is data-driven via `public/ship-classes/solstice-class.json` so adding a ne
 **Layout:** persistent left tree + right detail pane (CSS Grid).
 
 ```
-TopBar:  [☰] Voyage Tracker — Celebrity Solstice    [● Edit Mode | View Only]  [Enable Edit] [⚙] [🌙] [⇦]
+TopBar:  [☰] Voyage Tracker — Celebrity Solstice    [● Edit Mode | View Only]  [Enable Edit] [?] [⚙] [🌙] [⇦]
 
 ┌─ Sidebar (tree) ─────────┬─ Detail Pane ──────────────────────────────────┐
 │  🔍 Search               │                                                │
@@ -273,7 +273,7 @@ Voyage_Tracker_v7/
 │   │       └── exportImport.js         # bundle build / download / parse / import
 │   ├── domain/                         # factories, calculations, validation, constants, ports
 │   ├── contexts/                       # Theme, Toast, Session, VoyageStore
-│   ├── hooks/                          # useTheme, useToast, useSession, useVoyageStore
+│   ├── hooks/                          # useTheme, useToast, useSession, useVoyageStore, useEscapeKey
 │   ├── components/
 │   │   ├── auth/                       # AuthGate (session-based router)
 │   │   ├── session/                    # LandingScreen (ship + name + role + folder)
@@ -281,7 +281,7 @@ Voyage_Tracker_v7/
 │   │   ├── tree/                       # VoyageTree, TreeNode, TreeToolbar
 │   │   ├── detail/                     # VoyageDetail, ReportDetail, VoyageReportDetail, VoyageEndDetail, EmptyState
 │   │   ├── voyage/                     # ReportForm, PhaseSection, EquipmentRow, VoyageReportSection, …
-│   │   ├── modals/                     # NewVoyage, AddLeg, VoyageEnd, DeleteVoyage, StaleFile, Settings, ManualCarryOver
+│   │   ├── modals/                     # NewVoyage, AddLeg, VoyageEnd, DeleteVoyage, StaleFile, Settings, ManualCarryOver, Help
 │   │   ├── ui/                         # PortCombobox, FloatingCarryOverButton, etc.
 │   │   └── Icons.jsx
 │   ├── styles/

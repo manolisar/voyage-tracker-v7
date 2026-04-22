@@ -90,6 +90,12 @@ export const AlertTriangle = (p) => i(p, <>
 
 export const Check = (p) => i(p, <polyline points="20 6 9 17 4 12" />);
 
+export const HelpCircle = (p) => i(p, <>
+  <circle cx="12" cy="12" r="10" />
+  <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+  <line x1="12" y1="17" x2="12.01" y2="17" />
+</>);
+
 export const Search = (p) => i(p, <>
   <circle cx="11" cy="11" r="7" />
   <line x1="21" y1="21" x2="16.65" y2="16.65" />

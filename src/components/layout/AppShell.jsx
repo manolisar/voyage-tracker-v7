@@ -17,6 +17,7 @@ import { AddLegModal } from '../modals/AddLegModal';
 import { VoyageEndModal } from '../modals/VoyageEndModal';
 import { DeleteVoyageModal } from '../modals/DeleteVoyageModal';
 import { StaleFileModal } from '../modals/StaleFileModal';
+import { HelpModal } from '../modals/HelpModal';
 import { Eye } from '../Icons';
 
 export function AppShell() {
@@ -25,6 +26,7 @@ export function AppShell() {
   const [shipClass, setShipClass] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [newVoyageOpen, setNewVoyageOpen] = useState(false);
   const [addLegFor,   setAddLegFor]   = useState(null);
   const [endVoyageFor, setEndVoyageFor] = useState(null);
@@ -102,6 +104,7 @@ export function AppShell() {
           onEnableEdit={enterEditMode}
           onNewVoyage={() => setNewVoyageOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenHelp={() => setHelpOpen(true)}
         />
 
         {!editMode && (
@@ -141,6 +144,10 @@ export function AppShell() {
 
         {settingsOpen && (
           <SettingsPanel shipClass={shipClass} onClose={() => setSettingsOpen(false)} />
+        )}
+
+        {helpOpen && (
+          <HelpModal onClose={() => setHelpOpen(false)} />
         )}
 
         {newVoyageOpen && (
