@@ -1,8 +1,9 @@
 // DeleteVoyageModal — confirmation before VoyageStore.deleteVoyage removes
 // the on-disk JSON file. Destructive; there is no undo.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { voyageRouteLongLabel } from '../../domain/factories';
 import { X, AlertTriangle } from '../Icons';
 
@@ -13,11 +14,7 @@ export function DeleteVoyageModal({ filename, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, busy]);
+  useEscapeKey(onClose, busy);
 
   const routeLabel = voyage
     ? voyageRouteLongLabel(voyage)

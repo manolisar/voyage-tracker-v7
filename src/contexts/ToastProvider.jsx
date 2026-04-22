@@ -3,7 +3,7 @@
 //   addToast('Saved', 'success');
 //   addToast('Network down', 'error', 6000);
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ToastContext } from './ToastContext';
 
 export function ToastProvider({ children }) {
@@ -24,8 +24,10 @@ export function ToastProvider({ children }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const value = useMemo(() => ({ addToast, removeToast }), [addToast, removeToast]);
+
   return (
-    <ToastContext.Provider value={{ addToast, removeToast }}>
+    <ToastContext.Provider value={value}>
       {children}
       <div className="toast-container" role="status" aria-live="polite">
         {toasts.map((t) => (

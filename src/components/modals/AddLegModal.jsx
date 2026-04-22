@@ -4,8 +4,9 @@
 //
 // Source of truth for copy + layout: mockup/index.html → renderAddLegModal.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { voyageRouteLabel } from '../../domain/factories';
 import { X } from '../Icons';
 
@@ -22,11 +23,7 @@ export function AddLegModal({ filename, shipClass, onClose }) {
   const [carryOver, setCarryOver] = useState(!!lastLeg);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const canSubmit = !!shipClass && !!voyage;
 

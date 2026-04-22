@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSession } from '../../hooks/useSession';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
 import { useToast } from '../../hooks/useToast';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import {
   pickDirectoryForShip,
   getHandleForShip,
@@ -63,12 +64,7 @@ export function SettingsPanel({ shipClass, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shipId, shipClass?.id]);
 
-  // Esc to close.
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, busy]);
+  useEscapeKey(onClose, !!busy);
 
   // Show the current folder name for reassurance. If permission isn't
   // granted (shouldn't happen post-landing) show a dash.

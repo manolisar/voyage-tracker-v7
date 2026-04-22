@@ -4,8 +4,9 @@
 // write goes through VoyageStore.createVoyage, which stamps a filename of
 // the form <SHIP_CODE>_<startDate>_<fromPort>-<toPort>.json.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { PortCombobox } from '../ui/PortCombobox';
 import { X } from '../Icons';
 
@@ -18,11 +19,7 @@ export function NewVoyageModal({ ship, shipClass, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, busy]);
+  useEscapeKey(onClose, busy);
 
   const canSubmit = !!fromPort?.code && !!toPort?.code && !!startDate && !busy && !!shipClass && !!ship?.code;
 

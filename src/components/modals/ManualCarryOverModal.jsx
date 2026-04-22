@@ -2,8 +2,9 @@
 // the target phase's START. Ported from v6 but data-driven over the ship
 // class's equipment list instead of hardcoded DG/boiler keys.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { X } from '../Icons';
 
 export function ManualCarryOverModal({ shipClass, onClose }) {
@@ -23,11 +24,7 @@ export function ManualCarryOverModal({ shipClass, onClose }) {
   // `carryOverOpen`), so `useState(initSelected)` runs with the current source
   // on every open — no sync effect needed.
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   if (!source || !target || !shipClass) return null;
 

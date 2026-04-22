@@ -4,8 +4,9 @@
 //
 // Source of truth for copy + layout: mockup/index.html → renderEndVoyageModal.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useVoyageStore } from '../../hooks/useVoyageStore';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { calcVoyageTotals, formatMT } from '../../domain/calculations';
 import { voyageRouteLabel } from '../../domain/factories';
 import { X } from '../Icons';
@@ -31,11 +32,7 @@ export function VoyageEndModal({ filename, shipClass, onClose }) {
   const [notes,     setNotes]     = useState(voyage?.voyageEnd?.notes || '');
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const canSubmit = !!shipClass && !!voyage && !!endDate;
 

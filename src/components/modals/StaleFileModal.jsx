@@ -10,7 +10,7 @@
 // The actual reload / overwrite / cancel logic lives in
 // VoyageStoreProvider — this component is purely the dialog.
 
-import { useEffect } from 'react';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { X, Cloud } from '../Icons';
 
 export function StaleFileModal({
@@ -21,11 +21,7 @@ export function StaleFileModal({
   onCancel,
   busy = false,
 }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && !busy) onCancel(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel, busy]);
+  useEscapeKey(onCancel, busy);
 
   return (
     <div className="modal-overlay" onClick={busy ? undefined : onCancel} role="presentation">
