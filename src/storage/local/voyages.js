@@ -41,7 +41,67 @@ async function readJson(fileHandle) {
   let voyage;
   try { voyage = JSON.parse(text); }
   catch (e) { throw new Error(`Invalid JSON in ${fileHandle.name}: ${e.message}`); }
-  return { voyage, mtime: file.lastModified };
+  return {
+    voyage: normalizeVoyageFromFilename(voyage, fileHandle.name),
+    mtime: file.lastModified,
+  };
+}
+
+// ── Defensive normalization on read ──────────────────────────────────────
+//
+// Voyage files in the wild sometimes have missing or malformed fromPort /
+// toPort objects — imported from v6 (where they were bare strings),
+// rescued from backups, or hand-edited. The v7 filename format encodes
+// the 3-letter port codes per CLAUDE.md §3, so we can always reconstruct
+// enough to render the route label in the tree. This doesn't touch the
+// on-disk file; the normalized object is written back the next time the
+// user saves the voyage.
+
+function parsePortsFromFilename(filename) {
+  if (!filename || typeof filename !== 'string') return null;
+  const base = filename.replace(/\.json$/i, '');
+  const parts = base.split('_');
+  if (parts.length < 3) return null;
+  // Ports segment is the LAST underscore-separated part. Handles odd
+  // ship-code quirks defensively (v7's shipCode is always 2 letters but
+  // we don't rely on that here).
+  const portsPart = parts[parts.length - 1];
+  const bits = portsPart.split('-');
+  if (bits.length < 2) return null;
+  // Two-part "FROM-TO" is the v7 shape. For defensive handling of v6-era
+  // multi-hop filenames ("FROM-MID-TO") we take the first and last bits.
+  const from = bits[0];
+  const to = bits[bits.length - 1];
+  if (!/^[A-Z0-9]{3}$/.test(from) || !/^[A-Z0-9]{3}$/.test(to)) return null;
+  return { from, to };
+}
+
+function asPortObject(p) {
+  if (p && typeof p === 'object') {
+    return {
+      code: typeof p.code === 'string' ? p.code : '',
+      name: typeof p.name === 'string' ? p.name : '',
+      country: typeof p.country === 'string' ? p.country : '',
+      locode: typeof p.locode === 'string' ? p.locode : '',
+    };
+  }
+  if (typeof p === 'string') {
+    // v6 legacy: fromPort/toPort were bare code strings.
+    return { code: p, name: '', country: '', locode: '' };
+  }
+  return { code: '', name: '', country: '', locode: '' };
+}
+
+function normalizeVoyageFromFilename(voyage, filename) {
+  if (!voyage || typeof voyage !== 'object') return voyage;
+  const parsed = parsePortsFromFilename(filename);
+  const fromPort = asPortObject(voyage.fromPort);
+  const toPort   = asPortObject(voyage.toPort);
+  if (parsed) {
+    if (!fromPort.code) fromPort.code = parsed.from;
+    if (!toPort.code)   toPort.code   = parsed.to;
+  }
+  return { ...voyage, fromPort, toPort };
 }
 
 async function writeJson(fileHandle, obj) {

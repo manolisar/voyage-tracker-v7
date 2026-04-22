@@ -22,6 +22,13 @@
 // target folder are skipped (listed in the return summary). This keeps v1
 // simple; conflict-on-import can be added later if it turns out to be
 // needed, but typical usage is importing into an empty folder.
+//
+// Permissive single-voyage import: if the user picks a plain voyage JSON
+// file (no `bundleVersion`, but has a `legs` array) we wrap it on the fly
+// as a synthetic one-voyage bundle. This is the common case when a crew
+// member hand-copies one voyage file out of the share and then wants to
+// import it elsewhere — strict bundle-only validation was hostile for
+// what's unambiguously a voyage.
 
 import { getHandleForShip } from './fsHandle';
 import { PathSafetyError } from './errors';
@@ -86,10 +93,39 @@ export function downloadBundle(bundle) {
   return filename;
 }
 
+// Detect a plain single-voyage JSON file and wrap it as a synthetic bundle
+// so the rest of the import pipeline doesn't need to branch. A voyage file
+// has no `bundleVersion` and carries a `legs` array (the defining shape
+// per src/domain/factories.js). Returns null if `parsed` doesn't look like
+// a standalone voyage — caller then falls through to full bundle validation.
+//
+// Filename precedence: `parsed.filename` if it was stamped into the JSON,
+// otherwise the upload's `file.name`. We still run `ensureSafeFilename` so
+// hostile inputs (`..\..\evil`) can't slip through via this path.
+function maybeWrapSingleVoyage(parsed, file) {
+  if (parsed == null || typeof parsed !== 'object') return null;
+  if (parsed.bundleVersion != null) return null;
+  if (!Array.isArray(parsed.legs)) return null;
+  const filename = (typeof parsed.filename === 'string' && parsed.filename) || file.name;
+  ensureSafeFilename(filename);
+  return {
+    bundleVersion: BUNDLE_VERSION,
+    shipId: typeof parsed.shipId === 'string' ? parsed.shipId : '',
+    exportedAt: new Date().toISOString(),
+    appVersion: APP_VERSION,
+    voyages: [{ filename, content: parsed }],
+  };
+}
+
 /**
  * Parse a user-provided bundle File (from `<input type="file">`) and validate
  * its shape. Returns the bundle object. Throws with a useful message if the
  * file isn't a valid bundle.
+ *
+ * Accepted shapes:
+ *   1. A full bundle (`{ bundleVersion: 1, shipId, voyages: [...] }`).
+ *   2. A standalone voyage JSON (has `legs: [...]`, no `bundleVersion`) —
+ *      wrapped on the fly; see `maybeWrapSingleVoyage` above.
  */
 export async function parseBundleFile(file) {
   const text = await file.text();
@@ -98,10 +134,19 @@ export async function parseBundleFile(file) {
   catch (e) { throw new Error(`Not valid JSON: ${e.message}`); }
 
   if (!parsed || typeof parsed !== 'object') {
-    throw new Error('Bundle root must be an object');
+    throw new Error('File root must be an object');
   }
+
+  // Permissive path: a single-voyage JSON gets wrapped as a synthetic bundle
+  // so the rest of the import pipeline stays uniform.
+  const wrapped = maybeWrapSingleVoyage(parsed, file);
+  if (wrapped) return wrapped;
+
   if (parsed.bundleVersion !== BUNDLE_VERSION) {
-    throw new Error(`Unsupported bundleVersion ${parsed.bundleVersion} (expected ${BUNDLE_VERSION})`);
+    throw new Error(
+      `Unsupported file: expected a bundle with bundleVersion ${BUNDLE_VERSION} ` +
+      `or a single voyage JSON (with a \`legs\` array); got bundleVersion ${parsed.bundleVersion}`,
+    );
   }
   if (typeof parsed.shipId !== 'string' || !parsed.shipId) {
     throw new Error('Bundle is missing shipId');
